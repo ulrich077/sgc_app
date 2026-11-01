@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'core/auth/auth_provider.dart';
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_strings.dart';
+import 'core/providers/theme_colors_provider.dart';
+import 'core/router/app_router.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,23 +15,24 @@ class SgcApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authProvider);
+    final router = ref.watch(routerProvider);
+    final colorsAsync = ref.watch(themeColorsProvider);
+    final colors = colorsAsync.maybeWhen(
+      data: (c) => c,
+      orElse: () => ThemeColors.defaults,
+    );
 
-    return MaterialApp(
+    return MaterialApp.router(
       title: AppStrings.appFullName,
       debugShowCheckedModeBanner: false,
+      routerConfig: router,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary),
-        scaffoldBackgroundColor: AppColors.background,
         useMaterial3: true,
-      ),
-      home: Scaffold(
-        body: Center(
-          child: Text(
-            'SGC — Auth status: ${auth.status.name}',
-            style: const TextStyle(fontSize: 18),
-          ),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: colors.primary,
+          secondary: colors.secondary,
         ),
+        scaffoldBackgroundColor: AppColors.background,
       ),
     );
   }
