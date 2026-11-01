@@ -8,6 +8,7 @@ import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/admin/admin_settings_screen.dart';
 import '../../features/admin/usuarios_screen.dart';
 import '../../features/admin/auditoria_screen.dart';
+import '../../features/citas/screens/cita_detalle_screen.dart';
 import '../../features/citas/screens/citas_screen.dart';
 import '../../features/citas/screens/kanban_screen.dart';
 import '../../features/citas/screens/firmas_enviadas_screen.dart';
@@ -80,6 +81,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/citas',
         builder: (context, state) => const CitasScreen(),
+      ),
+      GoRoute(
+        path: '/citas/:id',
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return CitaDetalleScreen(citaId: id);
+        },
       ),
       GoRoute(
         path: '/kanban',

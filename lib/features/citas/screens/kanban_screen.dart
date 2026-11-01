@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart' show OrderingTerm, OrderingMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
@@ -190,62 +191,66 @@ class _KanbanCard extends ConsumerWidget {
 
     return Card(
       margin: const EdgeInsets.all(AppSizes.sm),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(cita.personaNombre,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: AppSizes.xs),
-            Text(cita.personaCorreo,
-                style: const TextStyle(
-                    fontSize: 12, color: AppColors.textSecondary),
-                overflow: TextOverflow.ellipsis),
-            const SizedBox(height: AppSizes.xs),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today,
-                    size: 12, color: AppColors.textSecondary),
-                const SizedBox(width: 4),
-                Text(
-                  dateFmt.format(DateTime.fromMillisecondsSinceEpoch(
-                      cita.fechaHoraFirma)),
-                  style: const TextStyle(fontSize: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppSizes.sm),
+        onTap: () => context.push('/citas/${cita.id}'),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSizes.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(cita.personaNombre,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: AppSizes.xs),
+              Text(cita.personaCorreo,
+                  style: const TextStyle(
+                      fontSize: 12, color: AppColors.textSecondary),
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: AppSizes.xs),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today,
+                      size: 12, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(
+                    dateFmt.format(DateTime.fromMillisecondsSinceEpoch(
+                        cita.fechaHoraFirma)),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+              if (next.isNotEmpty) ...[
+                const SizedBox(height: AppSizes.sm),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: PopupMenuButton<CitaEstado>(
+                    tooltip: 'Cambiar estado',
+                    icon: const Icon(Icons.swap_horiz, size: 18),
+                    onSelected: (nuevo) => _cambiarEstado(context, ref, nuevo),
+                    itemBuilder: (_) => next
+                        .map((e) => PopupMenuItem<CitaEstado>(
+                              value: e,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      color: e.color,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppSizes.sm),
+                                  Text(e.label),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                  ),
                 ),
               ],
-            ),
-            if (next.isNotEmpty) ...[
-              const SizedBox(height: AppSizes.sm),
-              Align(
-                alignment: Alignment.centerRight,
-                child: PopupMenuButton<CitaEstado>(
-                  tooltip: 'Cambiar estado',
-                  icon: const Icon(Icons.swap_horiz, size: 18),
-                  onSelected: (nuevo) => _cambiarEstado(context, ref, nuevo),
-                  itemBuilder: (_) => next
-                      .map((e) => PopupMenuItem<CitaEstado>(
-                            value: e,
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: e.color,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSizes.sm),
-                                Text(e.label),
-                              ],
-                            ),
-                          ))
-                      .toList(),
-                ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );

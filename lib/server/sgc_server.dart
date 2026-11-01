@@ -9,6 +9,8 @@ import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../data/database/app_database.dart';
 import '../features/documentos/services/file_storage_service.dart';
+import '../features/documentos/services/pdf_service.dart';
+import '../features/documentos/services/placeholder_resolver.dart';
 import 'drift_change_notifier.dart';
 import 'ws_channel_hub.dart';
 
@@ -216,6 +218,86 @@ class SgcServer {
               'attachment; filename="${doc.nombre}"',
         },
       );
+    });
+
+    // POST /api/citas/<id>/pdf — genera Documento de Responsabilidad
+    router.post('/api/citas/<id>/pdf', (Request req, String idStr) async {
+      try {
+        final id = int.parse(idStr);
+        final cita = await (db.select(db.citas)
+              ..where((t) => t.id.equals(id)))
+            .getSingleOrNull();
+        if (cita == null) return Response.notFound('Cita no encontrada');
+
+        final cfgRows = await db.select(db.configuracion).get();
+        final cfg = {for (final r in cfgRows) r.clave: r.valor};
+
+        final empresa = cfg['empresa_nombre'] ?? '';
+        final nit = cfg['empresa_nit'] ?? '';
+        final logo = cfg['empresa_logo_base64'] ?? '';
+        final textoLegalPlantilla = cfg['texto_legal_responsabilidad'] ?? '';
+        final textoMultaPlantilla = cfg['texto_legal_multa'] ?? '';
+        final diasCgc =
+            int.tryParse(cfg['dias_limite_cgc'] ?? '') ?? 30;
+
+        final fechaFirma = DateTime.fromMillisecondsSinceEpoch(
+                cita.fechaHoraFirma)
+            .toLocal();
+        final fechaStr =
+            '${fechaFirma.day.toString().padLeft(2, '0')}/'
+            '${fechaFirma.month.toString().padLeft(2, '0')}/'
+            '${fechaFirma.year}';
+
+        final textoLegal = PlaceholderResolver.resolver(
+          textoLegalPlantilla,
+          nombre: cita.personaNombre,
+          dpi: cita.personaDpi,
+          correo: cita.personaCorreo,
+          fecha: fechaStr,
+          diasCgc: diasCgc,
+          empresaNombre: empresa,
+        );
+        final textoMulta = PlaceholderResolver.resolver(
+          textoMultaPlantilla,
+          nombre: cita.personaNombre,
+          dpi: cita.personaDpi,
+          correo: cita.personaCorreo,
+          fecha: fechaStr,
+          diasCgc: diasCgc,
+          empresaNombre: empresa,
+        );
+
+        final result = await PdfService().generarDocumentoResponsabilidad(
+          nombreFirmante: cita.personaNombre,
+          dpi: cita.personaDpi ?? '—',
+          correo: cita.personaCorreo,
+          fechaFirma: fechaStr,
+          textoLegal: textoLegal.isEmpty
+              ? 'El firmante declara ser el único responsable de apersonarse '
+                  'a la CGC en $diasCgc días.'
+              : textoLegal,
+          textoMulta: textoMulta.isEmpty
+              ? 'La Dirección RRHH y el Depto. Reclutamiento no se hacen '
+                  'responsables si se excede el plazo.'
+              : textoMulta,
+          empresaNombre: empresa,
+          empresaNit: nit,
+          logoBase64: logo,
+        );
+
+        return Response.ok(
+          result.bytes,
+          headers: {
+            'content-type': 'application/pdf',
+            'content-disposition':
+                'attachment; filename="${result.nombreArchivo}"',
+          },
+        );
+      } catch (e) {
+        return Response(500,
+            body: jsonEncode({'error': e.toString()}),
+            headers: {'content-type': 'application/json'});
+      }
     });
 
     final handler =

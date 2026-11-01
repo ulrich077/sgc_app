@@ -99,4 +99,14 @@ class ApiClient {
 
   Future<List<dynamic>> listarDocumentos(int citaId) async =>
       await _getList('/api/documentos/$citaId') as List<dynamic>;
+
+  Future<List<int>> descargarPdfResponsabilidad(int citaId) async {
+    final res = await http.post(
+      Uri.parse('${config.baseHttp}/api/citas/$citaId/pdf'),
+    );
+    if (res.statusCode != 200) {
+      throw ApiException(res.statusCode, res.body);
+    }
+    return res.bodyBytes;
+  }
 }

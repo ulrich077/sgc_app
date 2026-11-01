@@ -519,3 +519,19 @@ FIN DE LA ACTUALIZACIÓN
   Se puede hacer en un bloque extra 5.F.
 
 FIN DE FASE 5 ADELANTADA
+
+---
+
+## 26. DECISIONES FASE 3 (2026-11-01)
+
+1. PDF Documento de Responsabilidad se genera en el SERVIDOR
+   (POST /api/citas/:id/pdf). El cliente lo descarga, lo muestra con
+   printing preview, y lo imprime. Todos ven el mismo PDF centralizado.
+2. Logo incrustado desde configuracion.empresa_logo_base64.
+3. Firma es MANUAL en papel. El PDF tiene recuadro amplio con línea y
+   leyenda "Firma del contratado". NO hay imagen de firma ni canvas.
+   El operador imprime, el firmante firma en azul, el operador escanea
+   y sube el archivo firmado. El escaneo se almacena en el SERVIDOR.
+4. Texto legal con placeholders resueltos en el servidor al generar PDF:
+   {{nombre}}, {{dpi}}, {{correo}}, {{fecha}}, {{dias_cgc}},
+   {{empresa_nombre}}.

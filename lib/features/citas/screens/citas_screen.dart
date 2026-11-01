@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
@@ -337,23 +338,7 @@ class _CitasTable extends StatelessWidget {
   }
 
   void _abrirDetalle(BuildContext context, Cita cita) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(cita.personaNombre),
-        content: Text(
-          'Detalle de cita — se implementa en 2.C\n\n'
-          'Correo: ${cita.personaCorreo}\n'
-          'Estado: ${CitaEstado.fromDb(cita.estado).label}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
+    context.push('/citas/${cita.id}');
   }
 }
 
