@@ -7,6 +7,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_sizes.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/database_provider.dart';
+import '../../core/utils/dialogs.dart';
 import '../../core/providers/theme_colors_provider.dart';
 import '../../core/widgets/app_dialog_shell.dart';
 import '../../core/widgets/app_page_header.dart';
@@ -101,9 +102,7 @@ class _ColorPanelState extends ConsumerState<_ColorPanel> {
     await _upsert(db, 'color_primary', colorToHex(_primary));
     await _upsert(db, 'color_secondary', colorToHex(_secondary));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Colores guardados')),
-    );
+    await AppDialogs.success(context, 'Colores guardados.');
   }
 
   Future<void> _upsert(AppDatabase db, String clave, String valor) async {

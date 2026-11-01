@@ -8,6 +8,9 @@ import '../../features/dashboard/dashboard_screen.dart';
 import '../../features/admin/admin_settings_screen.dart';
 import '../../features/admin/usuarios_screen.dart';
 import '../../features/admin/auditoria_screen.dart';
+import '../../features/citas/screens/citas_screen.dart';
+import '../../features/citas/screens/kanban_screen.dart';
+import '../../features/citas/screens/firmas_enviadas_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ValueNotifier<AuthState>(ref.read(authProvider));
@@ -73,6 +76,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/auditoria',
         builder: (context, state) => const AuditoriaScreen(),
+      ),
+      GoRoute(
+        path: '/citas',
+        builder: (context, state) => const CitasScreen(),
+      ),
+      GoRoute(
+        path: '/kanban',
+        builder: (context, state) => const KanbanScreen(),
+      ),
+      GoRoute(
+        path: '/firmas-enviadas',
+        builder: (context, state) => const FirmasEnviadasScreen(),
       ),
     ],
   );

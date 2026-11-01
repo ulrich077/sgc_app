@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_sizes.dart';
-import '../../core/providers/database_provider.dart';
 import '../../core/widgets/app_page_header.dart';
 import '../../core/widgets/responsive_kpis_row.dart';
+import '../../data/database/app_database.dart';
+import '../citas/data/citas_repository.dart';
+import '../citas/domain/cita_estado.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -13,7 +16,7 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
-    final db = ref.watch(databaseProvider);
+    final repo = ref.watch(citasRepositoryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -33,46 +36,52 @@ class DashboardScreen extends ConsumerWidget {
             subtitle: 'Rol: ${auth.rolNombre ?? ''}',
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSizes.pagePadding),
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
             child: ResponsiveKpisRow(
               children: [
                 _KpiCard(
                   label: 'Citas totales',
                   icon: Icons.event_note,
                   color: AppColors.primary,
-                  stream: db.select(db.citas).watch().map((r) => r.length),
+                  stream: repo.watchTotalPorEstado(CitaEstado.citaCreada),
+                  sum: true,
+                  repo: repo,
                 ),
                 _KpiCard(
-                  label: 'Pendientes de envío',
+                  label: 'Pendientes envío',
                   icon: Icons.pending_actions,
                   color: AppColors.pendiente,
-                  stream: (db.select(db.citas)
-                        ..where((t) =>
-                            t.estado.equals('PENDIENTE_ENVIO_CONTRATO')))
-                      .watch()
-                      .map((r) => r.length),
+                  stream:
+                      repo.watchTotalPorEstado(CitaEstado.pendienteEnvioContrato),
                 ),
                 _KpiCard(
-                  label: 'Firmas enviadas',
+                  label: 'Contrato enviado',
                   icon: Icons.mark_email_read,
                   color: AppColors.enviada,
-                  stream: (db.select(db.citas)
-                        ..where((t) => t.estado.equals('CONTRATO_ENVIADO')))
-                      .watch()
-                      .map((r) => r.length),
+                  stream: repo.watchTotalPorEstado(CitaEstado.contratoEnviado),
                 ),
                 _KpiCard(
                   label: 'Cerradas',
                   icon: Icons.task_alt,
                   color: AppColors.success,
-                  stream: (db.select(db.citas)
-                        ..where((t) => t.estado.equals('CERRADA')))
-                      .watch()
-                      .map((r) => r.length),
+                  stream: repo.watchTotalPorEstado(CitaEstado.cerrada),
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: AppSizes.xl),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
+            child: Text('Actividad reciente',
+                style: Theme.of(context).textTheme.titleLarge),
+          ),
+          const SizedBox(height: AppSizes.md),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
+            child: _RecientesList(repo: repo),
           ),
           const SizedBox(height: AppSizes.xl),
         ],
@@ -86,12 +95,16 @@ class _KpiCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final Stream<int> stream;
+  final bool sum;
+  final CitasRepository? repo;
 
   const _KpiCard({
     required this.label,
     required this.icon,
     required this.color,
     required this.stream,
+    this.sum = false,
+    this.repo,
   });
 
   @override
@@ -139,6 +152,61 @@ class _KpiCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _RecientesList extends StatelessWidget {
+  final CitasRepository repo;
+  const _RecientesList({required this.repo});
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFmt = DateFormat('dd/MM HH:mm');
+    return StreamBuilder<List<Cita>>(
+      stream: repo.watchRecientes(limit: 8),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Padding(
+            padding: EdgeInsets.all(AppSizes.lg),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final rows = snap.data!;
+        if (rows.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(AppSizes.lg),
+            child: Center(child: Text('Sin actividad reciente.')),
+          );
+        }
+        return Card(
+          child: Column(
+            children: rows.map((c) {
+              final e = CitaEstado.fromDb(c.estado);
+              return ListTile(
+                dense: true,
+                leading: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: e.color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                title: Text(c.personaNombre),
+                subtitle: Text(e.label),
+                trailing: Text(
+                  c.dateCreation == null
+                      ? '—'
+                      : dateFmt.format(DateTime.fromMillisecondsSinceEpoch(
+                          c.dateCreation!)),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 }
