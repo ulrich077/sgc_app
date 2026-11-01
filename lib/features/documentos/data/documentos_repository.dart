@@ -7,6 +7,7 @@ import '../../../core/providers/database_provider.dart';
 import '../../../core/providers/sync_provider.dart';
 import '../../../data/database/app_database.dart';
 import '../domain/documento_tipo.dart';
+import '../../citas/data/auditoria_repository.dart';
 
 class DocumentosRepository {
   final AppDatabase _db;
@@ -73,17 +74,33 @@ class DocumentosRepository {
       citaId: citaId,
       nombre: nombreArchivo,
     );
-    return _db.into(_db.documentos).insert(DocumentosCompanion.insert(
-          citaId: citaId,
-          tipo: tipo.dbValue,
-          nombre: stored.nombre,
-          rutaArchivo: stored.rutaAbsoluta,
-          hashSha256: Value(stored.hashSha256),
-          mimeType: Value(stored.mimeType),
-          tamanoBytes: Value(stored.tamanoBytes),
-          subidoPor: userId,
-          subidoAt: DateTime.now().millisecondsSinceEpoch,
-        ));
+    final docId = await _db.into(_db.documentos).insert(
+          DocumentosCompanion.insert(
+            citaId: citaId,
+            tipo: tipo.dbValue,
+            nombre: stored.nombre,
+            rutaArchivo: stored.rutaAbsoluta,
+            hashSha256: Value(stored.hashSha256),
+            mimeType: Value(stored.mimeType),
+            tamanoBytes: Value(stored.tamanoBytes),
+            subidoPor: userId,
+            subidoAt: DateTime.now().millisecondsSinceEpoch,
+          ),
+        );
+
+    await AuditoriaRepository(_db).registrar(
+      userId: userId,
+      tabla: 'documentos',
+      registroId: docId,
+      accion: 'crear',
+      valorDespues: {
+        'tipo': tipo.dbValue,
+        'nombre': stored.nombre,
+        'hash': stored.hashSha256,
+      },
+    );
+
+    return docId;
   }
 
   Future<void> eliminar(int documentoId, int userId) async {
@@ -92,6 +109,12 @@ class DocumentosRepository {
         .write(const DocumentosCompanion(
       isDelete: Value(true),
     ));
+    await AuditoriaRepository(_db).registrar(
+      userId: userId,
+      tabla: 'documentos',
+      registroId: documentoId,
+      accion: 'eliminar',
+    );
   }
 }
 

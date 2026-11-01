@@ -7,6 +7,7 @@ import '../../../core/providers/database_provider.dart';
 import '../../../core/widgets/app_page_header.dart';
 import '../../../data/database/app_database.dart';
 import '../domain/cita_estado.dart';
+import '../data/eventos_repository.dart';
 import '../widgets/acciones_tab.dart';
 import '../widgets/documentos_tab.dart';
 
@@ -43,7 +44,7 @@ class CitaDetalleScreen extends ConsumerWidget {
         final estado = CitaEstado.fromDb(cita.estado);
 
         return DefaultTabController(
-          length: 3,
+          length: 4,
           child: Scaffold(
             appBar: AppBar(
               title: Text(cita.personaNombre),
@@ -52,6 +53,7 @@ class CitaDetalleScreen extends ConsumerWidget {
                   Tab(icon: Icon(Icons.info_outline), text: 'Datos'),
                   Tab(icon: Icon(Icons.folder_outlined), text: 'Documentos'),
                   Tab(icon: Icon(Icons.checklist), text: 'Acciones'),
+                  Tab(icon: Icon(Icons.history), text: 'Historial'),
                 ],
               ),
             ),
@@ -60,6 +62,7 @@ class CitaDetalleScreen extends ConsumerWidget {
                 _DatosTab(cita: cita, estado: estado, dateFmt: dateFmt),
                 DocumentosTab(citaId: cita.id),
                 AccionesTab(cita: cita),
+                _HistorialTab(citaId: cita.id),
               ],
             ),
           ),
@@ -147,6 +150,49 @@ class _DatosTab extends StatelessWidget {
           Expanded(child: Text(value)),
         ],
       ),
+    );
+  }
+}
+
+class _HistorialTab extends ConsumerWidget {
+  final int citaId;
+  const _HistorialTab({required this.citaId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(eventosRepositoryProvider);
+    final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+    return StreamBuilder<List<EventosCitaData>>(
+      stream: repo.watchPorCita(citaId),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final eventos = snap.data!;
+        if (eventos.isEmpty) {
+          return const Center(child: Text('Sin eventos registrados.'));
+        }
+        return ListView(
+          padding: const EdgeInsets.all(AppSizes.pagePadding),
+          children: eventos.map((e) {
+            return Card(
+              child: ListTile(
+                leading: const Icon(Icons.history, color: AppColors.primary),
+                title: Text(e.tipoEvento),
+                subtitle: Text(
+                  e.detalleJson ?? '',
+                  style: const TextStyle(fontSize: 11),
+                ),
+                trailing: Text(
+                  dateFmt.format(DateTime.fromMillisecondsSinceEpoch(
+                      e.createdAt)),
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 }

@@ -6,6 +6,8 @@ import '../../../core/providers/database_provider.dart';
 import '../../../core/providers/sync_provider.dart';
 import '../../../data/database/app_database.dart';
 import '../domain/cita_estado.dart';
+import 'eventos_repository.dart';
+import 'auditoria_repository.dart';
 import '../../correos/data/correos_repository.dart';
 import '../../correos/domain/correo_tipo.dart';
 import '../../correos/services/email_dispatcher.dart';
@@ -155,6 +157,19 @@ class CitasRepository {
       fechaHoraFirma: fechaHoraFirma,
       token: token,
     );
+
+    await AuditoriaRepository(_db).registrar(
+      userId: creadaPor,
+      tabla: 'citas',
+      registroId: id,
+      accion: 'crear',
+      valorDespues: {
+        'personaNombre': personaNombre,
+        'personaCorreo': personaCorreo,
+        'fechaHoraFirma': fechaHoraFirma.millisecondsSinceEpoch,
+      },
+    );
+
     return id;
   }
 
@@ -242,6 +257,23 @@ class CitasRepository {
         dateUpdated: Value(DateTime.now().millisecondsSinceEpoch),
         userUpdated: Value(userId),
       ),
+    );
+
+    // Registrar evento
+    await EventosRepository(_db).registrar(
+      citaId: citaId,
+      tipoEvento: 'estado_cambiado',
+      detalle: {'nuevo_estado': nuevoEstado.dbValue},
+      userId: userId,
+    );
+
+    // Auditar
+    await AuditoriaRepository(_db).registrar(
+      userId: userId,
+      tabla: 'citas',
+      registroId: citaId,
+      accion: 'cambiar_estado',
+      valorDespues: {'estado': nuevoEstado.dbValue},
     );
 
     if (nuevoEstado == CitaEstado.contratoEnviado) {

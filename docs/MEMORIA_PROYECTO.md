@@ -601,3 +601,42 @@ FIN DE FASE 5 ADELANTADA
   Si no, el correo sale sin adjuntos.
 
 FIN DE FASE 4
+
+---
+
+## 30. FASE 6 COMPLETADA (2026-11-01)
+
+### Archivos nuevos
+- lib/core/layout/app_shell.dart (Sidebar responsive + AppShell)
+- lib/features/citas/data/eventos_repository.dart (registrar, watchPorCita)
+- lib/features/citas/data/auditoria_repository.dart (registrar, watchTodos, watchPorTabla)
+- lib/features/reportes/data/reportes_repository.dart (watchKpis, obtenerCitas)
+- lib/features/reportes/data/excel_service.dart (generarCitas -> xlsx)
+- lib/features/reportes/screens/reportes_screen.dart (KPIs + exportar Excel + rango de fechas)
+
+### Cambios
+- router: ShellRoute con AppShell para todas las rutas protegidas; ruta /reportes
+- citas_repository: registra evento y auditoría en crear y cambiarEstado
+- documentos_repository: registra auditoría en subirBytes y eliminar
+- cita_detalle_screen: 4 tabs (Datos, Documentos, Acciones, Historial)
+- auditoria_screen: lista reactiva real (no placeholder)
+- app_shell: items según rol (admin ve todo, operador ve dashboard/citas/kanban/firmas/reportes)
+
+### Auditoría
+- citas: crear, cambiar_estado
+- documentos: crear, eliminar
+- eventos_cita: estado_cambiado (con jsonEncode del detalle)
+
+### Reportes
+- KPIs: total, en proceso, pendiente envío, enviadas, cerradas, canceladas, reagendadas
+- Filtro por rango de fechas (desde/hasta)
+- Exportar Excel con excel ^4.0.6
+- FilePicker para elegir ubicación destino
+
+### Sidebar
+- Admin: Dashboard, Citas, Kanban, Firmas enviadas, Reportes, Ajustes, Usuarios, Auditoría
+- Operador: Dashboard, Citas, Kanban, Firmas enviadas, Reportes
+- Cerrar sesión al pie
+- Responsive: drawer en mobile, fijo en desktop
+
+FIN DE FASE 6
