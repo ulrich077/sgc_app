@@ -100,6 +100,13 @@ class ApiClient {
   Future<List<dynamic>> listarDocumentos(int citaId) async =>
       await _getList('/api/documentos/$citaId') as List<dynamic>;
 
+  Future<Map<String, dynamic>> encolarCorreo(
+          Map<String, dynamic> payload) =>
+      _post('/api/correos/encolar', payload);
+
+  Future<List<dynamic>> listarCorreos() async =>
+      await _getList('/api/correos') as List<dynamic>;
+
   Future<List<int>> descargarPdfResponsabilidad(int citaId) async {
     final res = await http.post(
       Uri.parse('${config.baseHttp}/api/citas/$citaId/pdf'),

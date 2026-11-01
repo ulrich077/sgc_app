@@ -11,6 +11,8 @@ import '../data/database/app_database.dart';
 import '../features/documentos/services/file_storage_service.dart';
 import '../features/documentos/services/pdf_service.dart';
 import '../features/documentos/services/placeholder_resolver.dart';
+import '../features/correos/data/correos_repository.dart';
+import '../features/correos/domain/correo_tipo.dart';
 import 'drift_change_notifier.dart';
 import 'ws_channel_hub.dart';
 
@@ -298,6 +300,80 @@ class SgcServer {
             body: jsonEncode({'error': e.toString()}),
             headers: {'content-type': 'application/json'});
       }
+    });
+
+    // POST /api/correos/encolar
+    router.post('/api/correos/encolar', (Request req) async {
+      try {
+        final body =
+            jsonDecode(await req.readAsString()) as Map<String, dynamic>;
+        final repo = CorreosRepository(db);
+        final id = await repo.encolar(
+          citaId: body['citaId'] as int?,
+          tipo: CorreoTipo.fromDb(body['tipo'] as String),
+          destinatario: body['destinatario'] as String,
+          cc: body['cc'] as String?,
+          asunto: body['asunto'] as String,
+          cuerpoHtml: body['cuerpoHtml'] as String,
+          adjuntos: (body['adjuntos'] as List?)?.cast<String>(),
+        );
+        return _json({'id': id});
+      } catch (e) {
+        return Response(400,
+            body: jsonEncode({'error': e.toString()}),
+            headers: {'content-type': 'application/json'});
+      }
+    });
+
+    // GET /api/correos
+    router.get('/api/correos', (Request req) async {
+      final rows = await (db.select(db.correosLog)
+            ..orderBy([
+              (t) => OrderingTerm(
+                  expression: t.programadoAt, mode: OrderingMode.desc)
+            ]))
+          .get();
+      return _json(rows
+          .map((c) => {
+                'id': c.id,
+                'citaId': c.citaId,
+                'tipo': c.tipo,
+                'destinatario': c.destinatario,
+                'cc': c.cc,
+                'asunto': c.asunto,
+                'estado': c.estado,
+                'intentos': c.intentos,
+                'errorMensaje': c.errorMensaje,
+                'programadoAt': c.programadoAt,
+                'enviadoAt': c.enviadoAt,
+              })
+          .toList());
+    });
+
+    // GET /api/confirmar/<token> — el firmante abre el enlace del correo
+    router.get('/api/confirmar/<token>', (Request req, String token) async {
+      final cita = await (db.select(db.citas)
+            ..where((t) => t.tokenConfirmacion.equals(token)))
+          .getSingleOrNull();
+      if (cita == null) {
+        return Response.notFound('Enlace inválido o expirado.');
+      }
+      final expira = cita.tokenExpira;
+      if (expira != null && DateTime.now().millisecondsSinceEpoch > expira) {
+        return Response(410, body: 'El enlace ha expirado.');
+      }
+      await (db.update(db.citas)..where((t) => t.id.equals(cita.id))).write(
+        CitasCompanion(
+          confirmadoRecibidoAt: Value(DateTime.now().millisecondsSinceEpoch),
+          estado: const Value('CORREO_CONFIRMADO'),
+        ),
+      );
+      return Response.ok(
+        '<html><body><h2>Correo confirmado</h2>'
+        '<p>Gracias, ${cita.personaNombre}. Hemos registrado la confirmación.</p>'
+        '</body></html>',
+        headers: {'content-type': 'text/html; charset=utf-8'},
+      );
     });
 
     final handler =

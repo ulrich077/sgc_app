@@ -13,6 +13,8 @@ import '../../core/widgets/app_dialog_shell.dart';
 import '../../core/widgets/app_page_header.dart';
 import '../../core/widgets/responsive.dart';
 import '../../data/database/app_database.dart';
+import '../documentos/services/placeholder_resolver.dart';
+import 'correos_tab.dart';
 
 class AdminSettingsScreen extends ConsumerWidget {
   const AdminSettingsScreen({super.key});
@@ -29,7 +31,9 @@ class AdminSettingsScreen extends ConsumerWidget {
 
     final colorsAsync = ref.watch(themeColorsProvider);
 
-    return Scaffold(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Ajustes del sistema'),
         actions: [
@@ -39,8 +43,16 @@ class AdminSettingsScreen extends ConsumerWidget {
             onPressed: () => ref.read(authProvider.notifier).logout(),
           ),
         ],
+        bottom: const TabBar(
+          tabs: [
+            Tab(icon: Icon(Icons.tune), text: 'General'),
+            Tab(icon: Icon(Icons.email_outlined), text: 'Correos'),
+          ],
+        ),
       ),
-      body: ListView(
+      body: TabBarView(
+        children: [
+          ListView(
         children: [
           const AppPageHeader(
             title: 'Ajustes',
@@ -71,7 +83,149 @@ class AdminSettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: AppSizes.xl),
+          const SizedBox(height: AppSizes.lg),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSizes.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Plantillas de correo',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: AppSizes.sm),
+                    const Text(
+                      PlaceholderResolver.ayudaPlaceholders,
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    const SizedBox(height: AppSizes.md),
+                    _PlantillaEditor(
+                      clave: 'plantilla_prueba',
+                      titulo: 'Correo de prueba',
+                    ),
+                    _PlantillaEditor(
+                      clave: 'plantilla_confirmacion',
+                      titulo: 'Confirmación',
+                    ),
+                    _PlantillaEditor(
+                      clave: 'plantilla_reagenda',
+                      titulo: 'Reagenda',
+                    ),
+                    _PlantillaEditor(
+                      clave: 'plantilla_final',
+                      titulo: 'Correo final',
+                    ),
+                    _PlantillaEditor(
+                      clave: 'plantilla_recordatorio',
+                      titulo: 'Recordatorio',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+            const SizedBox(height: AppSizes.xl),
+          ],
+        ),
+          const CorreosTab(),
+        ],
+      ),
+      ),
+    );
+  }
+}
+
+class _PlantillaEditor extends ConsumerStatefulWidget {
+  final String clave;
+  final String titulo;
+  const _PlantillaEditor({required this.clave, required this.titulo});
+
+  @override
+  ConsumerState<_PlantillaEditor> createState() => _PlantillaEditorState();
+}
+
+class _PlantillaEditorState extends ConsumerState<_PlantillaEditor> {
+  final _ctrl = TextEditingController();
+  bool _cargado = false;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    if (_cargado) return;
+    final db = ref.read(databaseProvider);
+    final row = await (db.select(db.configuracion)
+          ..where((t) => t.clave.equals(widget.clave)))
+        .getSingleOrNull();
+    if (!mounted) return;
+    setState(() {
+      _ctrl.text = row?.valor ?? '';
+      _cargado = true;
+    });
+  }
+
+  Future<void> _guardar() async {
+    setState(() => _saving = true);
+    final db = ref.read(databaseProvider);
+    final existing = await (db.select(db.configuracion)
+          ..where((t) => t.clave.equals(widget.clave)))
+        .getSingleOrNull();
+    if (existing == null) {
+      await db.into(db.configuracion).insert(ConfiguracionCompanion.insert(
+            clave: widget.clave,
+            valor: Value(_ctrl.text),
+            tipo: const Value('string'),
+          ));
+    } else {
+      await (db.update(db.configuracion)
+            ..where((t) => t.clave.equals(widget.clave)))
+          .write(ConfiguracionCompanion(valor: Value(_ctrl.text)));
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+    await AppDialogs.success(context, 'Plantilla guardada.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _cargar();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSizes.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.titulo,
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: AppSizes.sm),
+          TextField(
+            controller: _ctrl,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'Escribe el cuerpo HTML de la plantilla...',
+            ),
+          ),
+          const SizedBox(height: AppSizes.sm),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              icon: _saving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save, size: 18),
+              label: const Text('Guardar'),
+              onPressed: _saving ? null : _guardar,
+            ),
+          ),
         ],
       ),
     );

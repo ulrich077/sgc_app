@@ -535,3 +535,69 @@ FIN DE FASE 5 ADELANTADA
 4. Texto legal con placeholders resueltos en el servidor al generar PDF:
    {{nombre}}, {{dpi}}, {{correo}}, {{fecha}}, {{dias_cgc}},
    {{empresa_nombre}}.
+
+---
+
+## 28. DECISIONES FASE 4 (2026-11-01)
+
+1. Plantillas de correo en configuracion (NO tabla nueva):
+   plantilla_prueba, plantilla_confirmacion, plantilla_reagenda,
+   plantilla_final, plantilla_recordatorio.
+   Todas soportan placeholders (mismos que el PDF + {{enlace_confirmacion}},
+   {{dias_limite}}).
+2. Adjuntos reales embebidos en el correo final:
+   - PDF Documento de Responsabilidad
+   - Contrato firmado (escaneo)
+3. correo_cc_final vacío -> sin CC. Con valor -> se agrega CC.
+4. Cola inteligente:
+   - Si no hay correos pendientes y el worker está libre -> envía inmediato.
+   - Si hay cola -> el nuevo correo se encola y se procesa en orden FIFO.
+   - Reintentos con backoff: 1m, 5m, 15m, 1h, 6h.
+
+---
+
+## 29. FASE 4 COMPLETADA (2026-11-01)
+
+### Archivos nuevos
+- lib/server/email_service.dart (SMTP con mailer, adjuntos reales, CC opcional)
+- lib/server/email_queue_worker.dart (worker con Timer 30s, backoff 1m/5m/15m/1h/6h/24h, max 6 intentos)
+- lib/features/correos/domain/correo_tipo.dart (CorreoTipo, CorreoEstado)
+- lib/features/correos/data/correos_repository.dart (encolar, watchTodos, watchPendientes, marcarEnviado, marcarFallido)
+- lib/features/correos/services/email_dispatcher.dart (resolverPlantilla, asuntoPara, tipoFromEstado)
+- lib/features/admin/correos_tab.dart (cola visible, reintentar manual)
+
+### Cambios en archivos existentes
+- app_database.dart: schemaVersion 3, migración con plantillas, seed con 5 plantillas
+- sgc_server.dart: POST /api/correos/encolar, GET /api/correos, GET /api/confirmar/<token>
+- main_server.dart: arranca EmailQueueWorker + SIGINT graceful
+- api_client.dart: encolarCorreo, listarCorreos
+- citas_repository.dart: crear() encola correo prueba con token; cambiarEstado() encola correo final (CONTRATO_ENVIADO) y reagenda (REAGENDADA)
+- acciones_tab.dart: botón "Reenviar correo de prueba"
+- admin_settings_screen.dart: DefaultTabController con 2 tabs (General, Correos)
+
+### Flujo de correos
+1. Crear cita -> encolar correo prueba con {{enlace_confirmacion}}
+2. Firmante abre enlace -> GET /api/confirmar/<token> marca confirmadoRecibidoAt y estado CORREO_CONFIRMADO
+3. Cambiar estado a CONTRATO_ENVIADO -> encolar correo final con adjuntos
+   (PDF responsabilidad + contrato firmado) y CC si correo_cc_final no vacío
+4. Cambiar estado a REAGENDADA -> encolar correo reagenda con {{motivo}}
+5. Botón reenviar prueba -> reencola correo prueba
+
+### Cola inteligente
+- Si no hay pendientes, nuevo correo se envía inmediato (worker cada 30s)
+- Si hay pendientes, se suma a la cola FIFO
+- Backoff: 1m, 5m, 15m, 1h, 6h, 24h
+- Max 6 intentos -> estado "fallido", reintento manual desde CorreosTab
+
+### Pendiente de Fase 4 (deuda técnica)
+- El worker corre solo en servidor. El cliente encola vía API REST.
+- Si el servidor no está corriendo, el cliente no puede encolar. Los correos
+  quedan en la DB local del cliente y se sincronizan cuando vuelva el server.
+- Sync de correos_log no implementado en WebSocketSyncService (solo citas).
+- El enlace /api/confirmar/<token> apunta a servidor_ip. Si el firmante está
+  fuera de la LAN, no funciona. En producción se necesitaría un dominio público.
+- Envío de correo final requiere que el operador haya subido el contrato firmado
+  y el documento de responsabilidad firmado antes de cambiar a CONTRATO_ENVIADO.
+  Si no, el correo sale sin adjuntos.
+
+FIN DE FASE 4

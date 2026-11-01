@@ -21,7 +21,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sgc_db'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -33,6 +33,13 @@ class AppDatabase extends _$AppDatabase {
           if (from < 2) {
             await _ensureClave('color_primary', '#FF1A237E');
             await _ensureClave('color_secondary', '#FF3949AB');
+          }
+          if (from < 3) {
+            await _ensureClave('plantilla_prueba', 'Hola {{nombre}}, este es un correo de prueba del sistema SGC. Confirma recibido haciendo clic en el siguiente enlace: {{enlace_confirmacion}}');
+            await _ensureClave('plantilla_confirmacion', 'Hola {{nombre}}, has confirmado recibir el correo. Te esperamos el día de tu firma.');
+            await _ensureClave('plantilla_reagenda', 'Hola {{nombre}}, tu cita ha sido reagendada. Motivo: {{motivo}}. Nueva fecha: {{fecha}}.');
+            await _ensureClave('plantilla_final', 'Hola {{nombre}}, adjuntamos el contrato firmado y el Documento de Responsabilidad. Recuerda apersonarte a la CGC en {{dias_cgc}} días.');
+            await _ensureClave('plantilla_recordatorio', 'Hola {{nombre}}, te recordamos que debes apersonarte a la CGC en {{dias_cgc}} días.');
           }
         },
       );
@@ -130,6 +137,11 @@ class AppDatabase extends _$AppDatabase {
       'impresora_ticket': '',
       'color_primary': '#FF1A237E',
       'color_secondary': '#FF3949AB',
+      'plantilla_prueba': 'Hola {{nombre}}, este es un correo de prueba del sistema SGC. Confirma recibido haciendo clic en el siguiente enlace: {{enlace_confirmacion}}',
+      'plantilla_confirmacion': 'Hola {{nombre}}, has confirmado recibir el correo. Te esperamos el día de tu firma.',
+      'plantilla_reagenda': 'Hola {{nombre}}, tu cita ha sido reagendada. Motivo: {{motivo}}. Nueva fecha: {{fecha}}.',
+      'plantilla_final': 'Hola {{nombre}}, adjuntamos el contrato firmado y el Documento de Responsabilidad. Recuerda apersonarte a la CGC en {{dias_cgc}} días.',
+      'plantilla_recordatorio': 'Hola {{nombre}}, te recordamos que debes apersonarte a la CGC en {{dias_cgc}} días.',
     };
     for (final e in clavesDefault.entries) {
       await into(configuracion).insert(ConfiguracionCompanion.insert(

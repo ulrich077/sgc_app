@@ -7,9 +7,13 @@ import 'package:printing/printing.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
+import '../../../core/providers/database_provider.dart';
 import '../../../core/providers/sync_provider.dart';
 import '../../../core/utils/dialogs.dart';
 import '../../../data/database/app_database.dart';
+import '../../correos/data/correos_repository.dart';
+import '../../correos/domain/correo_tipo.dart';
+import '../../correos/services/email_dispatcher.dart';
 import '../../documentos/data/documentos_repository.dart';
 import '../../documentos/domain/documento_tipo.dart';
 import '../data/citas_repository.dart';
@@ -150,6 +154,30 @@ class AccionesTab extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text('Correo de prueba',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: AppSizes.sm),
+                const Text(
+                  'Reenvía al firmante el enlace de confirmación de correo.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: AppSizes.md),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reenviar correo de prueba'),
+                  onPressed: () => _reenviarPrueba(context, ref),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSizes.lg),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSizes.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text('Cambiar estado',
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: AppSizes.sm),
@@ -254,6 +282,42 @@ class AccionesTab extends ConsumerWidget {
     } catch (e) {
       if (!context.mounted) return;
       await AppDialogs.error(context, 'Error al generar PDF: $e');
+    }
+  }
+
+  Future<void> _reenviarPrueba(BuildContext context, WidgetRef ref) async {
+    try {
+      final repo = ref.read(correosRepositoryProvider);
+      final cfgRows = await ref.read(databaseProvider).select(
+          ref.read(databaseProvider).configuracion).get();
+      final cfg = {for (final r in cfgRows) r.clave: r.valor};
+      final servidorIp = cfg['servidor_ip'] ?? '';
+      final puerto = cfg['servidor_puerto'] ?? '8080';
+      final token = cita.tokenConfirmacion ?? '';
+      final enlace = servidorIp.isEmpty
+          ? '(IP del servidor no configurada)'
+          : 'http://$servidorIp:$puerto/api/confirmar/$token';
+      final plantilla = cfg['plantilla_prueba'] ?? '';
+      final empresa = cfg['empresa_nombre'] ?? 'SGC';
+      final cuerpo = EmailDispatcher.resolverPlantilla(
+        plantilla: plantilla,
+        cita: cita,
+        config: cfg.cast<String, String>(),
+        enlaceConfirmacion: enlace,
+      );
+      await repo.encolar(
+        citaId: cita.id,
+        tipo: CorreoTipo.prueba,
+        destinatario: cita.personaCorreo,
+        asunto:
+            EmailDispatcher.asuntoPara(CorreoTipo.prueba, empresa: empresa),
+        cuerpoHtml: cuerpo,
+      );
+      if (!context.mounted) return;
+      await AppDialogs.success(context, 'Correo de prueba encolado.');
+    } catch (e) {
+      if (!context.mounted) return;
+      await AppDialogs.error(context, 'No se pudo encolar: $e');
     }
   }
 
