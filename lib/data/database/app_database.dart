@@ -21,7 +21,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'sgc_db'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -29,24 +29,43 @@ class AppDatabase extends _$AppDatabase {
           await m.createAll();
           await _seedInicial();
         },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await _ensureClave('color_primary', '#FF1A237E');
+            await _ensureClave('color_secondary', '#FF3949AB');
+          }
+        },
       );
 
+  Future<void> _ensureClave(String clave, String valorDefault) async {
+    final existing = await (select(configuracion)
+          ..where((t) => t.clave.equals(clave)))
+        .getSingleOrNull();
+    if (existing == null) {
+      await into(configuracion).insert(ConfiguracionCompanion.insert(
+        clave: clave,
+        valor: Value(valorDefault),
+        tipo: const Value('string'),
+      ));
+    }
+  }
+
   Future<void> _seedInicial() async {
-    // Roles
     final adminRolId = await into(roles).insert(
       RolesCompanion.insert(
         nombre: 'administrador',
-        descripcion: const Value('Gestión de usuarios, permisos, SMTP, plantillas, estadísticas'),
+        descripcion: const Value(
+            'Gestión de usuarios, permisos, SMTP, plantillas, estadísticas'),
       ),
     );
     final operadorRolId = await into(roles).insert(
       RolesCompanion.insert(
         nombre: 'operador',
-        descripcion: const Value('Flujo operativo de citas, reagenda, escaneos, correos'),
+        descripcion: const Value(
+            'Flujo operativo de citas, reagenda, escaneos, correos'),
       ),
     );
 
-    // Permisos
     const modulosAdmin = [
       'usuarios',
       'permisos',
@@ -77,7 +96,6 @@ class AppDatabase extends _$AppDatabase {
       ));
     }
 
-    // Usuario admin seed
     final hash = sha256.convert(utf8.encode('hacker94')).toString();
     await into(usuarios).insert(UsuariosCompanion.insert(
       username: 'admin',
@@ -87,7 +105,6 @@ class AppDatabase extends _$AppDatabase {
       dateCreation: Value(DateTime.now().millisecondsSinceEpoch),
     ));
 
-    // Configuración inicial (todo vacío, se llena desde ajustes)
     const clavesDefault = <String, String>{
       'empresa_nombre': '',
       'empresa_nit': '',
@@ -111,6 +128,8 @@ class AppDatabase extends _$AppDatabase {
       'servidor_ip': '',
       'es_servidor': 'false',
       'impresora_ticket': '',
+      'color_primary': '#FF1A237E',
+      'color_secondary': '#FF3949AB',
     };
     for (final e in clavesDefault.entries) {
       await into(configuracion).insert(ConfiguracionCompanion.insert(
