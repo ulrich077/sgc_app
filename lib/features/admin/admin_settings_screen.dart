@@ -1,5 +1,6 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
-import 'package:flutter_colorpicker/flutter_colorpicker.dart' hide colorToHex;
+import 'package:flutter_colorpicker/flutter_colorpicker.dart' as cp;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/constants/app_colors.dart';
@@ -7,8 +8,10 @@ import '../../core/constants/app_sizes.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/database_provider.dart';
 import '../../core/providers/theme_colors_provider.dart';
+import '../../core/widgets/app_dialog_shell.dart';
+import '../../core/widgets/app_page_header.dart';
+import '../../core/widgets/responsive.dart';
 import '../../data/database/app_database.dart';
-import 'package:drift/drift.dart' show Value;
 
 class AdminSettingsScreen extends ConsumerWidget {
   const AdminSettingsScreen({super.key});
@@ -37,30 +40,37 @@ class AdminSettingsScreen extends ConsumerWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(AppSizes.pagePadding),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSizes.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Colores del sistema',
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: AppSizes.md),
-                  colorsAsync.when(
-                    loading: () => const Center(
-                        child: Padding(
-                      padding: EdgeInsets.all(AppSizes.lg),
-                      child: CircularProgressIndicator(),
-                    )),
-                    error: (e, _) => Text('Error: $e'),
-                    data: (colors) => _ColorPanel(colors: colors),
-                  ),
-                ],
+          const AppPageHeader(
+            title: 'Ajustes',
+            subtitle: 'Configuración global del sistema',
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSizes.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Colores del sistema',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: AppSizes.md),
+                    colorsAsync.when(
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(AppSizes.lg),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                      error: (e, _) => Text('Error: $e'),
+                      data: (colors) => _ColorPanel(colors: colors),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
+          const SizedBox(height: AppSizes.xl),
         ],
       ),
     );
@@ -117,16 +127,8 @@ class _ColorPanelState extends ConsumerState<_ColorPanel> {
     Color temp = current;
     await showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: ColorPicker(
-            pickerColor: current,
-            onColorChanged: (c) => temp = c,
-            enableAlpha: false,
-            labelTypes: const [],
-          ),
-        ),
+      builder: (_) => AppDialogShell(
+        title: title,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -140,45 +142,66 @@ class _ColorPanelState extends ConsumerState<_ColorPanel> {
             child: const Text('Aplicar'),
           ),
         ],
+        child: cp.ColorPicker(
+          pickerColor: current,
+          onColorChanged: (c) => temp = c,
+          enableAlpha: false,
+          labelTypes: const [],
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
+    final swatches = [
+      _ColorSwatch(
+        label: 'Primary',
+        color: _primary,
+        onTap: () => _pick(_primary, (c) {
+          setState(() => _primary = c);
+        }, 'Color primario'),
+      ),
+      _ColorSwatch(
+        label: 'Secondary',
+        color: _secondary,
+        onTap: () => _pick(_secondary, (c) {
+          setState(() => _secondary = c);
+        }, 'Color secundario'),
+      ),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            _ColorSwatch(
-              label: 'Primary',
-              color: _primary,
-              onTap: () => _pick(_primary, (c) {
-                setState(() => _primary = c);
-              }, 'Color primario'),
-            ),
-            const SizedBox(width: AppSizes.lg),
-            _ColorSwatch(
-              label: 'Secondary',
-              color: _secondary,
-              onTap: () => _pick(_secondary, (c) {
-                setState(() => _secondary = c);
-              }, 'Color secundario'),
-            ),
-          ],
-        ),
+        if (isMobile)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              swatches[0],
+              const SizedBox(height: AppSizes.md),
+              swatches[1],
+            ],
+          )
+        else
+          Row(
+            children: [
+              swatches[0],
+              const SizedBox(width: AppSizes.lg),
+              swatches[1],
+            ],
+          ),
         const SizedBox(height: AppSizes.lg),
-        Row(
+        Wrap(
+          spacing: AppSizes.sm,
+          runSpacing: AppSizes.sm,
           children: [
-            Expanded(
-              child: FilledButton.icon(
-                icon: const Icon(Icons.save),
-                label: const Text('Guardar colores'),
-                onPressed: _save,
-              ),
+            FilledButton.icon(
+              icon: const Icon(Icons.save),
+              label: const Text('Guardar colores'),
+              onPressed: _save,
             ),
-            const SizedBox(width: AppSizes.md),
             OutlinedButton.icon(
               icon: const Icon(Icons.restore),
               label: const Text('Restablecer'),
@@ -227,8 +250,7 @@ class _ColorSwatch extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: Theme.of(context).textTheme.labelSmall),
+                Text(label, style: Theme.of(context).textTheme.labelSmall),
                 Text(colorToHex(color),
                     style: Theme.of(context).textTheme.bodySmall),
               ],
