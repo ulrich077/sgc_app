@@ -313,3 +313,209 @@ FIN DE LA MEMORIA
 - Sidebar con items por rol (no existe layout principal aún)
 - Link de navegación a /citas, /kanban, /firmas-enviadas desde UI (solo router por ahora)
 - CitaDetalleScreen completo (por ahora diálogo simple)
+
+---
+
+## 17. DECISIONES FASE 3 (2026-11-01)
+
+1. Texto legal con placeholders editables desde ajustes.
+   Placeholders soportados: {{nombre}}, {{dpi}}, {{correo}}, {{fecha}},
+   {{dias_cgc}}, {{empresa_nombre}}.
+   El admin escribe la plantilla en configuracion.texto_legal_responsabilidad
+   y configuracion.texto_legal_multa. El sistema reemplaza al generar
+   PDF y correo final.
+2. Subida de escaneos con file_picker, copia a
+   ApplicationDocumentsDirectory/escaneos/<citaId>/<timestamp>_<nombre>.
+3. Hash SHA-256 del archivo subido guardado en documentos.hash_sha256.
+4. El texto legal configurado en ajustes se usa en:
+   - PDF Documento de Responsabilidad
+   - Correo final (cuerpo del email)
+
+---
+
+## 18. REORDENAMIENTO DE FASES (2026-11-01)
+
+Decisión: TODO se almacena en el servidor (DB + archivos + PDFs).
+Los clientes son thin clients con DB local para lectura y WebSocket para
+recibir notificaciones de cambios. Por eso la Fase 5 (servidor LAN) se
+adelanta antes de la Fase 3 (documentos) y la Fase 4 (correos).
+
+Nuevo orden:
+1. Fase 1 — Fundación (CERRADA, commit 85f9753)
+2. Fase 2 — CRUD citas + Kanban + Dashboard (CERRADA, commit 132ab40)
+3. FASE 5 ADELANTADA — Servidor Shelf + WebSocket + cliente thin
+4. Fase 3 — Documentos + PDF + flujo de firma (usa API de archivos del server)
+5. Fase 4 — Cola de correos + SMTP (el server centraliza SMTP)
+6. Fase 6 — Reportes + Excel + auditoría real
+
+---
+
+## 19. ARQUITECTURA DE SINCRONIZACIÓN (2026-11-01)
+
+### Modelo elegido: D + WebSocket broadcast
+- Cada cliente tiene DB local Drift (mismas tablas que el servidor).
+- La UI usa `watch()` sobre Drift local. Reactividad total (Regla III).
+- El servidor tiene la DB maestra.
+- El servidor escucha `db.tableUpdates(TableUpdateQuery.onAllTables(...))`
+  de Drift y hace broadcast por WebSocket a TODOS los clientes conectados.
+- Cuando un cliente recibe `{"event":"db_changed","tables":[...]}`,
+  hace pull REST de la tabla afectada, escribe en su Drift local, y el
+  `watch()` local dispara la actualización de UI.
+- Escrituras: el cliente envía REST al servidor (POST/PATCH), el servidor
+  escribe en DB maestra, Drift del servidor emite tableUpdate, el servidor
+  hace broadcast, TODOS los clientes (incluido el que escribió) hacen pull.
+
+### Flujo de un cambio (ejemplo: crear cita desde Cliente B)
+1. Cliente B: POST /api/citas al servidor
+2. Servidor: insert en DB maestra
+3. Drift del servidor: tableUpdates emite {citas}
+4. Servidor: broadcast {"event":"db_changed","tables":["citas"]} a todos
+5. Cliente A y Cliente B: reciben el evento, hacen GET /api/citas
+6. Cada cliente escribe el resultado en su Drift local
+7. watch() local de cada cliente dispara, la UI se actualiza sola
+
+### Decisiones técnicas
+- WebSocket (NO SSE). Paquetes: shelf_web_socket + web_socket_channel.
+- Pull completo de la tabla afectada (NO delta). Simple y suficiente en LAN.
+- El cliente que escribe también recibe el broadcast y hace pull
+  (no hay escritura optimista local; se espera confirmación del server).
+
+### Tablas que notifican
+citas, documentos, configuracion, correos_log.
+
+---
+
+## 20. FASE 5 ADELANTADA — BLOQUE 5.A (EN PROGRESO)
+
+### Archivos nuevos
+- lib/server/ws_channel_hub.dart
+  List<WebSocketChannel> _clients + add() + broadcast(Map) + closeAll()
+- lib/server/drift_change_notifier.dart
+  Escucha db.tableUpdates(TableUpdateQuery.onAllTables(db.allTables))
+  y hace hub.broadcast({"event":"db_changed","tables":[...]}).
+  OJO: el getter correcto es TableUpdate.table (NO tableName).
+- lib/server/sgc_server.dart
+  SgcServer(db): start(host, port) con shelf + shelf_router + shelf_web_socket
+  Endpoints:
+    GET /api/health -> {status, clients, ts}
+    GET /api/ws -> WebSocket upgrade, hub.add(ws), envía {"event":"hello"}
+    GET /api/citas -> lista completa (JSON)
+    POST /api/citas -> 501 Not implemented (se completa en 5.C)
+- lib/server/main_server.dart
+  Entry point: dart run lib/server/main_server.dart
+  Corre en 0.0.0.0:8080
+
+### Dependencias nuevas
+shelf, shelf_router, shelf_web_socket, web_socket_channel
+
+### Pendiente en 5.A
+- flutter analyze limpio (2 issues corregidos: u.table en lugar de u.tableName,
+  y quitar import sin usar de database_provider en sgc_server.dart)
+
+---
+
+## 21. BLOQUES PENDIENTES DE FASE 5 ADELANTADA
+
+| Bloque | Contenido |
+|---|---|
+| 5.B | Cliente: ApiClient (GET/POST/PATCH REST) + WebSocketSyncService (escucha /api/ws, hace pull, escribe en Drift local) |
+| 5.C | Servidor: completar POST /api/citas, PATCH /api/citas/:id, GET /api/config |
+| 5.D | Servidor: endpoint de subida de archivos multipart + descarga |
+| 5.E | Wizard primer arranque (server/cliente + IP del servidor) |
+| 5.F | Detección de modo server/cliente al arrancar la app + arranque del server en background |
+
+---
+
+## 22. DEUDA TÉCNICA ACTUALIZADA
+
+- Sidebar / layout principal con items por rol (Fase 2 dejó rutas pero sin nav visual)
+- CitaDetalleScreen completo (por ahora diálogo simple en CitasScreen y Kanban)
+- FileStorageService guarda local. Debe cambiar a envío HTTP al servidor en 5.D.
+- DocumentosRepository ya no usa FileStorageService directamente (se quitó _storage).
+  El flujo de subida se implementará en 5.D vía API del servidor.
+- Regla V estricta en FirmasEnviadasScreen (afinar scroll vertical+horizontal)
+- Panel de colores ya usa AppDialogs (SnackBar corregido)
+
+---
+
+## 23. COMANDOS ÚTILES
+
+- Servidor: dart run lib/server/main_server.dart
+- App: flutter run
+- Regenerar Drift: dart run build_runner build
+- Gate de commit: if flutter analyze; then git add . && git commit -m "..." && git push; fi
+
+---
+
+## 24. HISTORIAL DE COMMITS ACTUALIZADO
+
+132ab40 (HEAD -> main, origin/main) feat(citas): CRUD de citas, DataTable paginado con sort SQL, Kanban con transiciones, Firmas Enviadas y Dashboard real
+85f9753 feat: fundación del sistema — DB v2, auth, router por rol, widgets responsive, dashboard reactivo y panel de colores admin
+8822b1a feat(widgets): responsive helpers + fixes router/colorpicker
+15e9576 feat(ui): router por rol, login, dashboard, panel de colores admin y placeholders admin
+6adeded feat(theme): migración v2 con color_primary/color_secondary y themeColorsProvider reactivo
+0a3b649 feat(theme): migración v2 (duplicado)
+9a8de18 feat(db): tablas Drift, AppDatabase con seed
+d596e2e chore: dependencias base
+0e43565 chore: proyecto Flutter inicial generado con flutter create
+
+FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 25. FASE 5 ADELANTADA — COMPLETADA (2026-11-01)
+
+### Archivos nuevos
+- lib/server/ws_channel_hub.dart (Set<WebSocketChannel> + broadcast)
+- lib/server/drift_change_notifier.dart (tableUpdates -> broadcast {"event":"db_changed","tables":[...]})
+- lib/server/sgc_server.dart (Shelf + Router + WebSocket + endpoints REST)
+- lib/server/main_server.dart (entry point: dart run lib/server/main_server.dart)
+- lib/core/network/network_config.dart (NetworkConfig + networkConfigProvider)
+- lib/core/network/api_client.dart (ApiClient: health, listarCitas, crearCita, actualizarCita, subirDocumento, listarDocumentos)
+- lib/core/network/websocket_sync_service.dart (WebSocketSyncService: conexión, reconexión, pull de citas)
+- lib/core/providers/sync_provider.dart (apiClientProvider, syncServiceProvider)
+- lib/features/wizard/primer_arranque_screen.dart (wizard server/cliente + IP)
+- lib/main.dart (gate de wizard + MaterialApp.router reactivo)
+
+### Endpoints del servidor
+- GET /api/health -> {status, clients, ts}
+- GET /api/ws -> WebSocket upgrade, hub.add(ws)
+- GET /api/citas -> lista completa
+- POST /api/citas -> crear cita
+- PATCH /api/citas/<id> -> actualizar estado/notas/checks
+- GET /api/config -> todas las claves de configuracion
+- GET /api/documentos/<citaId> -> documentos de una cita
+- POST /api/documentos/upload -> multipart (meta JSON + file), guarda en server, hash SHA-256, inserta en DB
+- GET /api/documentos/<id>/download -> descarga archivo
+
+### Flujo de sincronización (confirmado)
+1. Cliente B escribe via POST/PATCH al servidor
+2. Servidor inserta/actualiza en DB maestra
+3. Drift del servidor emite tableUpdates
+4. DriftChangeNotifier hace broadcast {"event":"db_changed","tables":[...]}
+5. TODOS los clientes reciben, hacen pull de la tabla afectada
+6. Cada cliente escribe en su Drift local
+7. watch() de cada cliente dispara, la UI se actualiza sola
+
+### Cliente thin
+- CitasRepository: si es cliente remoto, crear() y cambiarEstado() van por API.
+  Lectura siempre por watch() sobre Drift local.
+- DocumentosRepository: si es cliente remoto, subirBytes() va por API multipart.
+  Servidor guarda local + inserta.
+- WebSocketSyncService: se conecta a ws://server:8080/api/ws, reconecta a los 3s,
+  en db_changed hace pull de citas (configuracion/documentos: TODO en Fase 3).
+- Wizard: primer arranque pide server/cliente + IP, guarda en configuracion
+  (es_servidor, servidor_ip, wizard_completado). main.dart bloquea la app hasta
+  que wizard_completado=true.
+
+### Pendiente de Fase 5 (deuda técnica)
+- WebSocketSyncService._syncCitas: creadaPor: 1 hardcoded (FIXME). Requiere auth
+  remoto (Fase 5.x o Fase 4).
+- Sync de configuracion y documentos: por ahora solo se sincroniza citas.
+  Documentos se sincronizan en Fase 3 cuando se usen.
+- Servidor no arranca automáticamente desde la app. Hay que correr
+  dart run lib/server/main_server.dart en el server.
+- La app no detecta aún si esServidor para arrancar SgcServer en background.
+  Se puede hacer en un bloque extra 5.F.
+
+FIN DE FASE 5 ADELANTADA

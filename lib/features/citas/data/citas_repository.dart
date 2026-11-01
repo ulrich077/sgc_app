@@ -1,6 +1,9 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/network/network_config.dart';
 import '../../../core/providers/database_provider.dart';
+import '../../../core/providers/sync_provider.dart';
 import '../../../data/database/app_database.dart';
 import '../domain/cita_estado.dart';
 
@@ -10,7 +13,6 @@ class CitasPage {
   const CitasPage({required this.rows, required this.totalFiltered});
 }
 
-/// Whitelist de columnas para ordenar. Devuelve un [OrderingTerm].
 OrderingTerm _orderBy(String column, bool ascending, $CitasTable t) {
   final mode = ascending ? OrderingMode.asc : OrderingMode.desc;
   switch (column) {
@@ -28,7 +30,18 @@ OrderingTerm _orderBy(String column, bool ascending, $CitasTable t) {
 
 class CitasRepository {
   final AppDatabase _db;
-  CitasRepository(this._db);
+  final ApiClient? _api;
+  final NetworkConfig? _network;
+
+  CitasRepository(
+    this._db, {
+    ApiClient? api,
+    NetworkConfig? network,
+  })  : _api = api, // ignore: prefer_initializing_formals
+        _network = network; // ignore: prefer_initializing_formals
+
+  bool get _esClienteRemoto =>
+      _api != null && _network != null && !_network.esServidor;
 
   Stream<CitasPage> watchPage({
     required int page,
@@ -91,6 +104,19 @@ class CitasRepository {
     String? notas,
     required int creadaPor,
   }) async {
+    if (_esClienteRemoto) {
+      final res = await _api!.crearCita({
+        'personaNombre': personaNombre,
+        'personaCorreo': personaCorreo,
+        'fechaHoraFirma': fechaHoraFirma.millisecondsSinceEpoch,
+        'personaDpi': personaDpi,
+        'personaTelefono': personaTelefono,
+        'notas': notas,
+        'creadaPor': creadaPor,
+      });
+      return (res['id'] as num).toInt();
+    }
+
     final uuid =
         '${DateTime.now().microsecondsSinceEpoch}-${_db.hashCode}';
     return _db.into(_db.citas).insert(CitasCompanion.insert(
@@ -112,6 +138,13 @@ class CitasRepository {
     required CitaEstado nuevoEstado,
     required int userId,
   }) async {
+    if (_esClienteRemoto) {
+      await _api!.actualizarCita(citaId, {
+        'estado': nuevoEstado.dbValue,
+        'userUpdated': userId,
+      });
+      return;
+    }
     await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
       CitasCompanion(
         estado: Value(nuevoEstado.dbValue),
@@ -132,12 +165,23 @@ class CitasRepository {
   Stream<List<Cita>> watchRecientes({int limit = 10}) {
     return (_db.select(_db.citas)
           ..where((t) => t.isDelete.equals(false))
-          ..orderBy([(t) => OrderingTerm(expression: t.dateCreation, mode: OrderingMode.desc)])
+          ..orderBy([
+            (t) => OrderingTerm(
+                expression: t.dateCreation, mode: OrderingMode.desc)
+          ])
           ..limit(limit))
         .watch();
   }
 }
 
+/// Provider que se reconfigura cuando cambia networkConfig o apiClient.
 final citasRepositoryProvider = Provider<CitasRepository>((ref) {
-  return CitasRepository(ref.watch(databaseProvider));
+  final db = ref.watch(databaseProvider);
+  final netAsync = ref.watch(networkConfigProvider);
+  final apiAsync = ref.watch(apiClientProvider);
+
+  final net = netAsync.maybeWhen(data: (c) => c, orElse: () => null);
+  final api = apiAsync.maybeWhen(data: (a) => a, orElse: () => null);
+
+  return CitasRepository(db, api: api, network: net);
 });
