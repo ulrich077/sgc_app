@@ -112,3 +112,31 @@ FIN DE LA MEMORIA
 ---
 
 FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 6. FASE 2.11: UNIFICACIÓN DE DISEÑO Y FONT AWESOME (2026-11-02)
+
+### 6.1. Rediseño de la Pestaña de Acciones (Checkout Premium)
+- Se eliminaron los Switch y DropZones gigantes.
+- Ahora cada paso es una `_PremiumCard` con un número (1, 2, 3, 4) y sombras suaves.
+- El flujo es secuencial: el Paso 2 se bloquea si el Paso 1 no está completo, etc.
+- Los botones de subida ahora son franjas horizontales (`_PremiumUploadRow`) estilo Stripe.
+- Al subir un documento, la franja se convierte en una fila de "recibo" (`_PremiumDocRow`) con botones de descarga y eliminar.
+
+### 6.2. Rediseño de la Pestaña de Datos
+- Se unificó el diseño con tarjetas blancas, sombras suaves y fondo gris (`#F4F7F9`).
+- Los botones de "Editar Correo" y "Reenviar Correo" ahora están integrados en la tarjeta de "Contacto y Cita".
+
+### 6.3. FontAwesome
+- Se instaló `font_awesome_flutter`.
+- Los íconos de los pasos se reemplazaron por: `folderOpen`, `fileSignature`, `fileContract` y `paperPlane`.
+- Los botones de descarga (`download`), eliminar (`trashCan`) y bloqueado (`lock`) usan FontAwesome.
+
+### 6.4. Polling en el Envío de Correos
+- El problema era que el `Stream` de Drift no notificaba al cliente cuando el worker (en el servidor) cambiaba el estado del correo.
+- Se implementó un `Timer.periodic` de 2 segundos (Polling) en `_enviarCorreoFinal`. La UI consulta la DB hasta que el estado sea `enviado`, con un timeout de seguridad de 30 segundos.
+
+---
+
+FIN DE LA ACTUALIZACIÓN

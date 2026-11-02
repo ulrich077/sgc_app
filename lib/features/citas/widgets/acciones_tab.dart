@@ -47,7 +47,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
 
       _subFinal?.cancel();
       _subFinal = (db.select(db.correosLog)
-            ..where((t) => t.citaId.equals(widget.cita.id) & t.tipo.equals('final_'))
+            ..where((t) => t.citaId.equals(widget.cita.id) & t.tipo.equals('final'))
             ..orderBy([(t) => OrderingTerm.desc(t.id)])..limit(1))
           .watchSingleOrNull().listen((correo) {
         if (correo != null && correo.estado == 'enviado') {
