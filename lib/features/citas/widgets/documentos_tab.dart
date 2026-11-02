@@ -2,11 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart';
+import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
-import '../../../data/database/app_database.dart';
+import '../../../core/utils/dialogs.dart';
 import '../../documentos/data/documentos_repository.dart';
 import '../../documentos/domain/documento_tipo.dart';
+import '../../../data/database/app_database.dart';
 
 class DocumentosTab extends ConsumerStatefulWidget {
   final int citaId;
@@ -16,7 +19,10 @@ class DocumentosTab extends ConsumerStatefulWidget {
   ConsumerState<DocumentosTab> createState() => _DocumentosTabState();
 }
 
-class _DocumentosTabState extends ConsumerState<DocumentosTab> {
+class _DocumentosTabState extends ConsumerState<DocumentosTab> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   Future<void> _mostrarOpcionesDocumento(Documento doc) async {
     await showDialog(
       context: context,
@@ -36,7 +42,7 @@ class _DocumentosTabState extends ConsumerState<DocumentosTab> {
                 if (await file.exists()) {
                   await launchUrl(Uri.file(doc.rutaArchivo));
                 } else {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('El archivo no existe.')));
+                  if (mounted) AppDialogs.error(context, 'El archivo no existe.');
                 }
               },
             ),
@@ -60,7 +66,7 @@ class _DocumentosTabState extends ConsumerState<DocumentosTab> {
                   context: context,
                   builder: (c) => AlertDialog(
                     title: const Text('Detalles del Archivo'),
-                    content: Text('Ruta: ${doc.rutaArchivo}\n\nTamaño: ${(doc.tamanoBytes ?? 0) / 1024} KB\n\nSubido el: ${doc.subidoAt}'),
+                    content: Text('Ruta: ${doc.rutaArchivo}\n\nTamaño: ${_formatBytes(doc.tamanoBytes ?? 0)}\n\nSubido el: ${doc.subidoAt}'),
                     actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cerrar'))],
                   ),
                 );
@@ -72,8 +78,51 @@ class _DocumentosTabState extends ConsumerState<DocumentosTab> {
     );
   }
 
+  Future<void> _subirDocumento() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+    if (result.isNotEmpty && result.first.path != null) {
+      try {
+        final auth = ref.read(authProvider);
+        final repo = ref.read(documentosRepositoryProvider);
+        await repo.subirDocumento(
+          citaId: widget.citaId,
+          tipo: DocumentoTipo.escaneoAdicional,
+          archivo: File(result.first.path!),
+          userId: auth.userId ?? 1,
+        );
+        if (mounted) AppDialogs.success(context, 'Documento subido correctamente.');
+      } catch (e) {
+        if (mounted) AppDialogs.error(context, 'Error al subir: $e');
+      }
+    }
+  }
+
+  Future<void> _eliminarDocumento(Documento doc) async {
+    final confirm = await AppDialogs.confirm(context, '¿Estás seguro de eliminar este documento? Esta acción no se puede deshacer.');
+    if (confirm == true) {
+      try {
+        final auth = ref.read(authProvider);
+        final repo = ref.read(documentosRepositoryProvider);
+        await repo.eliminar(doc.id, auth.userId ?? 1);
+        if (mounted) AppDialogs.success(context, 'Documento eliminado.');
+      } catch (e) {
+        if (mounted) AppDialogs.error(context, 'Error al eliminar: $e');
+      }
+    }
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / 1048576).toStringAsFixed(1)} MB';
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final repo = ref.watch(documentosRepositoryProvider);
 
     return StreamBuilder<List<Documento>>(
@@ -91,12 +140,14 @@ class _DocumentosTabState extends ConsumerState<DocumentosTab> {
                 children: [
                   const Text('Expediente de Documentos', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
                     icon: const Icon(Icons.upload_file, size: 18),
                     label: const Text('Subir Documento'),
-                    onPressed: () async {
-                       // Aquí podrías abrir un FilePicker
-                    },
+                    onPressed: _subirDocumento,
                   ),
                 ],
               ),
@@ -142,17 +193,22 @@ class _DocumentosTabState extends ConsumerState<DocumentosTab> {
                                         child: Text(
                                           DocumentoTipo.fromDb(doc.tipo).label,
                                           style: const TextStyle(fontWeight: FontWeight.bold),
-                                          maxLines: 1,
+                                          maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      const Icon(Icons.more_vert, color: Colors.grey, size: 20),
+                                      // BOTÓN DE ELIMINAR RÁPIDO
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                        tooltip: 'Eliminar documento',
+                                        onPressed: () => _eliminarDocumento(doc),
+                                      ),
                                     ],
                                   ),
                                   const Spacer(),
-                                  Text(doc.nombre, style: const TextStyle(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Text(doc.nombre, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
                                   const SizedBox(height: 4),
-                                  Text('${(doc.tamanoBytes ?? 0) / 1024} KB', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                  Text(_formatBytes(doc.tamanoBytes ?? 0), style: const TextStyle(fontSize: 12, color: Colors.grey)),
                                 ],
                               ),
                             ),

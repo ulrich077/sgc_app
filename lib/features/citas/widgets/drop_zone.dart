@@ -1,4 +1,5 @@
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
@@ -26,6 +27,15 @@ class DropZone extends StatefulWidget {
 class _DropZoneState extends State<DropZone> {
   bool _isDragging = false;
 
+  Future<void> _abrirSelector() async {
+    try {
+      final result = await FilePicker.pickFiles();
+      if (result.isNotEmpty && result.first.path != null) {
+        widget.onFileDropped(result.first.path!);
+      }
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!widget.habilitado) {
@@ -47,7 +57,10 @@ class _DropZoneState extends State<DropZone> {
       onDragExited: (detail) {
         setState(() => _isDragging = false);
       },
-      child: _buildContainer(),
+      child: GestureDetector(
+        onTap: _abrirSelector,
+        child: _buildContainer(),
+      ),
     );
   }
 

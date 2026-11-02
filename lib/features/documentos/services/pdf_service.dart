@@ -1,8 +1,8 @@
-import 'dart:typed_data';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import '../../../data/database/app_database.dart';
 
 class PdfResult {
@@ -12,25 +12,27 @@ class PdfResult {
 }
 
 class PdfService {
-  static Future<PdfResult> generarDocumentoResponsabilidad(Cita cita) async {
+  static Future<PdfResult> generarDocumentoResponsabilidad(Cita cita, {String? logoBase64}) async {
     final pdf = pw.Document();
 
-    // Cargar fuente (si tienes el archivo .ttf en assets, cárgalo aquí)
-    // final font = pw.Font.ttf(await rootBundle.load('assets/fonts/Baskerville.ttf'));
-    // Usaremos la fuente por defecto pero forzaremos estilos.
-
-    // Cargar logo (asegúrate de tener assets/logo.png o cambia la ruta)
     pw.MemoryImage? logo;
-    try {
-      final logoData = await rootBundle.load('assets/logo.png');
-      logo = pw.MemoryImage(logoData.buffer.asUint8List());
-    } catch (e) {
-      // Si no hay logo, se ignora
+    if (logoBase64 != null && logoBase64.isNotEmpty) {
+      try {
+        final cleanBase64 = logoBase64.replaceAll(RegExp(r'\s+'), '');
+        logo = pw.MemoryImage(base64Decode(cleanBase64));
+      } catch (e) {
+        debugPrint('Error al cargar el logo en el PDF: $e');
+      }
     }
 
-    final fechaStr = DateFormat('dd/MM/yyyy').format(DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma * 1000));
+    // Formato de fecha: "Guatemala 02 de noviembre del 2026"
+    final fechaFirma = DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma * 1000);
+    final diaStr = DateFormat('dd').format(fechaFirma);
+    final mesStr = DateFormat('MMMM', 'es').format(fechaFirma);
+    final anioStr = DateFormat('yyyy').format(fechaFirma);
+    final fechaStr = 'Guatemala $diaStr de $mesStr del $anioStr';
 
-    // Convertir nombre a Title Case (CamelCase)
+    // Convertir nombre a Title Case
     final nombreCamelCase = cita.personaNombre
         .toLowerCase()
         .split(' ')
@@ -43,36 +45,38 @@ class PdfService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: pageFormat,
-        margin: const pw.EdgeInsets.all(40),
+        // MÁRGENES DE 1 PULGADA (72 puntos) A LOS LADOS
+        margin: const pw.EdgeInsets.symmetric(horizontal: 72, vertical: 40),
         build: (pw.Context context) {
           return [
-            // LOGO Y ENCABEZADO
+            // ENCABEZADO CON LOGO
+            if (logo != null) ...[
+              // LOGO 3 PUNTOS MÁS GRANDE (width: 160)
+              pw.Center(child: pw.Image(logo, width: 160)),
+              pw.SizedBox(height: 15),
+            ],
+            
+            // TÍTULO DEL DEPARTAMENTO
             pw.Center(
-              child: pw.Column(
-                children: [
-                  if (logo != null) ...[
-                    pw.Image(logo, width: 120),
-                    pw.SizedBox(height: 15),
-                  ],
-                  // Texto que reemplaza al Congreso (opcional, o puedes quitarlo)
-                  pw.Text('CONGRESO DE LA REPÚBLICA DE GUATEMALA', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Dirección de Recursos Humanos', style: const pw.TextStyle(fontSize: 10)),
-                  pw.SizedBox(height: 30),
-                  pw.Text('CONSTANCIA DE NOTIFICACIÓN Y COMPROMISO', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Presentación de Declaración Jurada Patrimonial', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-                ],
+              child: pw.Text(
+                'Departamento de Reclutamiento, Selección y Contratos',
+                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                textAlign: pw.TextAlign.center,
               ),
             ),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 30),
+
+            // FECHA A LA DERECHA
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(fechaStr, style: const pw.TextStyle(fontSize: 11)),
+            ),
+            pw.SizedBox(height: 30),
 
             // CUERPO
-            pw.Text('Lugar y fecha: Guatemala, $fechaStr', style: const pw.TextStyle(fontSize: 11)),
-            pw.SizedBox(height: 20),
-            
-            // NOMBRE EN NEGRITA Y CAMELCASE
             pw.Text(
-              'Yo, ${nombreCamelCase.toUpperCase()}, quien me identifico con Documento Personal de Identificación (DPI) número ${cita.personaDpi ?? "—"}, en mi calidad de colaborador, al suscribir el contrato respectivo, HAGO CONSTAR que he sido informado(a) por el Departamento de Reclutamiento, Selección y Contratación de lo siguiente:',
-              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold), // Negrita
+              'Yo, ${nombreCamelCase.toUpperCase()}, quien me identifico con Documento Personal de Identificación (DPI) número ${cita.personaDpi ?? "—"}, en mi calidad de contratado, al suscribir el contrato respectivo, HAGO CONSTAR que he sido informado(a) por el Departamento de Reclutamiento, Selección y Contratación de lo siguiente:',
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
               textAlign: pw.TextAlign.justify,
             ),
             pw.SizedBox(height: 15),
@@ -109,7 +113,7 @@ class PdfService {
             ),
             pw.SizedBox(height: 20),
 
-            // COMPROMISO (NEGRITA Y CURSIVA)
+            // COMPROMISO
             pw.Text(
               'En consecuencia, ME COMPROMETO a presentar mi Declaración Jurada Patrimonial ante la Contraloría General de Cuentas dentro del plazo legal, y a entregar a este Departamento copia de la constancia de presentación dentro de los treinta (30) días siguientes a su presentación, a efecto de que sea incorporada a mi expediente personal.',
               style: const pw.TextStyle(fontSize: 11),
@@ -135,7 +139,7 @@ class PdfService {
                     pw.SizedBox(height: 5),
                     pw.Text(nombreCamelCase, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
                     pw.Text('DPI: ${cita.personaDpi ?? "—"}', style: const pw.TextStyle(fontSize: 10)),
-                    pw.Text('Firma del(a) declarante', style: const pw.TextStyle(fontSize: 10)),
+                    pw.Text('Firma', style: const pw.TextStyle(fontSize: 10)), // CAMBIO AQUÍ
                   ],
                 ),
                 pw.Column(

@@ -73,13 +73,11 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
   Future<void> _generarYDescargarPdf(Cita cita) async {
     try {
       if (mounted) AppDialogs.info(context, 'Generando PDF en el servidor...');
-      
       final db = ref.read(databaseProvider);
       final cfgRows = await db.select(db.configuracion).get();
       final cfg = {for (final r in cfgRows) r.clave: r.valor};
       final ip = cfg['es_servidor'] == 'true' ? '127.0.0.1' : (cfg['servidor_ip'] ?? '127.0.0.1');
       final puerto = cfg['servidor_puerto'] ?? '8080';
-      
       final url = 'http://$ip:$puerto/api/citas/${cita.id}/pdf';
       
       if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) {
@@ -108,60 +106,121 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
               stream: docsRepo.watchPorCita(cita.id),
               builder: (context, snapshot) {
                 final docs = snapshot.data ?? [];
+                
+                // Buscamos si los documentos ya fueron subidos
+                final hasPostMortem = docs.where((d) => d.tipo == DocumentoTipo.postMortemEscaneo.dbValue).firstOrNull;
+                final hasContraloria = docs.where((d) => d.tipo == DocumentoTipo.contraloriaEscaneo.dbValue).firstOrNull;
                 final hasResp = docs.where((d) => d.tipo == DocumentoTipo.responsabilidadFirmado.dbValue).firstOrNull;
                 final hasContrato = docs.where((d) => d.tipo == DocumentoTipo.contratoFirmado.dbValue).firstOrNull;
                 
-                final bool paso3Habilitado = hasResp != null;
-                final bool procesoCompleto = hasResp != null && hasContrato != null;
+                final bool paso1Completado = hasPostMortem != null && hasContraloria != null;
+                final bool paso2Completado = hasResp != null;
+                final bool paso3Completado = hasContrato != null;
+                final bool procesoCompleto = paso1Completado && paso2Completado && paso3Completado;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // PASO 1: SOLO POST MORTEM Y CONTRALORÍA
+                    // PASO 1 (CON DROPZONE PROFESIONAL)
                     _ActionCard(
-                      title: 'Paso 1: Documentos Requeridos',
-                      subtitle: 'Marque si el firmante presentó el Post Mortem y la Contraloría.',
+                      title: 'Paso 1: Documentos Físicos',
+                      subtitle: 'Suba los escaneos del Post Mortem y la Contraloría.',
                       icon: Icons.assignment_turned_in_outlined,
-                      isCompleted: cita.postMortemPresentado && cita.contraloriaPresentada,
+                      isCompleted: paso1Completado,
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _CustomSwitch(
-                            title: 'Post Mortem Presentado',
-                            value: cita.postMortemPresentado,
-                            onChanged: (v) async {
-                              await CitasRepository(ref.read(databaseProvider)).cambiarCheckPostMortem(cita.id, v, auth.userId ?? 1);
-                            },
-                          ),
-                          const SizedBox(height: AppSizes.sm),
-                          _CustomSwitch(
-                            title: 'Contraloría Presentada',
-                            value: cita.contraloriaPresentada,
-                            onChanged: (v) async {
-                              await CitasRepository(ref.read(databaseProvider)).cambiarCheckContraloria(cita.id, v, auth.userId ?? 1);
-                            },
-                          ),
+                          // Post Mortem
+                          if (hasPostMortem == null)
+                            DropZone(
+                              titulo: 'Arrastra aquí el Post Mortem',
+                              subtitulo: 'O haz clic para buscarlo. (PDF)',
+                              icono: Icons.description,
+                              onFileDropped: (path) async {
+                                try {
+                                  await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.postMortemEscaneo, archivo: File(path), userId: auth.userId ?? 1);
+                                  // Actualizar el switch en la DB a true automáticamente
+                                  await CitasRepository(ref.read(databaseProvider)).cambiarCheckPostMortem(cita.id, true, auth.userId ?? 1);
+                                  if (context.mounted) AppDialogs.success(context, 'Post Mortem subido.');
+                                } catch (e) {
+                                  if (context.mounted) AppDialogs.error(context, 'Error: $e');
+                                }
+                              },
+                            )
+                          else
+                            _DocItem(
+                              nombre: 'Post Mortem Escaneado', 
+                              ruta: hasPostMortem.rutaArchivo,
+                              onDownload: () => _abrirPdf(hasPostMortem.rutaArchivo),
+                              onDelete: () async {
+                                await docsRepo.eliminar(hasPostMortem.id, auth.userId ?? 1);
+                                await CitasRepository(ref.read(databaseProvider)).cambiarCheckPostMortem(cita.id, false, auth.userId ?? 1);
+                              },
+                            ),
+
+                          const SizedBox(height: AppSizes.lg),
+
+                          // Contraloría
+                          if (hasContraloria == null)
+                            DropZone(
+                              titulo: 'Arrastra aquí la Contraloría',
+                              subtitulo: 'O haz clic para buscarla. (PDF)',
+                              icono: Icons.description,
+                              onFileDropped: (path) async {
+                                try {
+                                  await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.contraloriaEscaneo, archivo: File(path), userId: auth.userId ?? 1);
+                                  await CitasRepository(ref.read(databaseProvider)).cambiarCheckContraloria(cita.id, true, auth.userId ?? 1);
+                                  if (context.mounted) AppDialogs.success(context, 'Contraloría subida.');
+                                } catch (e) {
+                                  if (context.mounted) AppDialogs.error(context, 'Error: $e');
+                                }
+                              },
+                            )
+                          else
+                            _DocItem(
+                              nombre: 'Contraloría Escaneada', 
+                              ruta: hasContraloria.rutaArchivo,
+                              onDownload: () => _abrirPdf(hasContraloria.rutaArchivo),
+                              onDelete: () async {
+                                await docsRepo.eliminar(hasContraloria.id, auth.userId ?? 1);
+                                await CitasRepository(ref.read(databaseProvider)).cambiarCheckContraloria(cita.id, false, auth.userId ?? 1);
+                              },
+                            ),
                         ],
                       ),
                     ),
                     const SizedBox(height: AppSizes.lg),
 
-                    // PASO 2: RESPONSABILIDAD
+                    // PASO 2
                     _ActionCard(
                       title: 'Paso 2: Documento de Responsabilidad',
                       subtitle: 'Descargue el documento, fírmelo y súbalo escaneado.',
                       icon: Icons.description_outlined,
-                      isCompleted: hasResp != null,
+                      isCompleted: paso2Completado,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: const BorderSide(color: AppColors.primary),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                             ),
-                            icon: const Icon(Icons.download, color: AppColors.primary),
-                            label: const Text('Descargar PDF de Responsabilidad', style: TextStyle(color: AppColors.primary)),
-                            onPressed: () => _generarYDescargarPdf(cita),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.picture_as_pdf, color: AppColors.primary),
+                                const SizedBox(width: 12),
+                                const Expanded(
+                                  child: Text('Documento de Responsabilidad (PDF)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () => _generarYDescargarPdf(cita),
+                                  icon: const Icon(Icons.download, size: 18),
+                                  label: const Text('Descargar'),
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: AppSizes.lg),
                           
@@ -193,13 +252,14 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                     ),
                     const SizedBox(height: AppSizes.lg),
 
-                    // PASO 3: CONTRATO FIRMADO
+                    // PASO 3
                     _ActionCard(
                       title: 'Paso 3: Subir Contrato Firmado',
                       subtitle: 'Arrastra el contrato escaneado.',
                       icon: Icons.file_present,
-                      isLocked: !paso3Habilitado,
-                      child: !paso3Habilitado
+                      isLocked: !paso2Completado,
+                      isCompleted: paso3Completado,
+                      child: !paso2Completado
                         ? _buildLockedMessage('Complete el Paso 2 para desbloquear.')
                         : (hasContrato == null
                             ? DropZone(
@@ -226,7 +286,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                     ),
                     const SizedBox(height: AppSizes.lg),
 
-                    // PASO 4: ENVIAR CORREO FINAL
+                    // PASO 4
                     _ActionCard(
                       title: 'Paso 4: Enviar Correo Final',
                       subtitle: 'Envía los documentos firmados al firmante.',
@@ -301,33 +361,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
   }
 }
 
-// SWITCH PREMIUM DEL PASO 1
-class _CustomSwitch extends StatelessWidget {
-  final String title;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _CustomSwitch({required this.title, required this.value, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: value ? Colors.green.withValues(alpha: 0.05) : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(AppSizes.md),
-        border: Border.all(color: value ? Colors.green.withValues(alpha: 0.3) : Colors.transparent),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: Text(title, style: TextStyle(fontWeight: value ? FontWeight.bold : FontWeight.normal, color: value ? Colors.green.shade800 : AppColors.textPrimary))),
-          Switch(value: value, onChanged: onChanged, activeThumbColor: Colors.green),
-        ],
-      ),
-    );
-  }
-}
-
-// ITEM DE DOCUMENTO PREMIUM (Paso 2 y 3)
+// COMPONENTE PREMIUM PARA MOSTRAR EL DOCUMENTO SUBIDO
 class _DocItem extends StatelessWidget {
   final String nombre;
   final String ruta;
@@ -341,24 +375,39 @@ class _DocItem extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.05),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(AppSizes.md),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+        boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 4))],
       ),
       child: Row(
         children: [
-          const Icon(Icons.check_circle, color: Colors.green),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), shape: BoxShape.circle),
+            child: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+          ),
+          const SizedBox(width: 16),
           Expanded(
-            child: Text(nombre, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nombre, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 2),
+                const Text('Documento subido exitosamente', style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w500)),
+              ],
+            ),
           ),
           IconButton(
-            icon: const Icon(Icons.download, color: AppColors.primary),
+            style: IconButton.styleFrom(backgroundColor: AppColors.primary.withValues(alpha: 0.1)),
+            icon: const Icon(Icons.download, color: AppColors.primary, size: 20),
             tooltip: 'Descargar PDF',
             onPressed: onDownload,
           ),
+          const SizedBox(width: 8),
           IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
+            style: IconButton.styleFrom(backgroundColor: Colors.red.withValues(alpha: 0.1)),
+            icon: const Icon(Icons.delete, color: Colors.red, size: 20),
             tooltip: 'Eliminar documento',
             onPressed: onDelete,
           ),
@@ -368,7 +417,6 @@ class _DocItem extends StatelessWidget {
   }
 }
 
-// TARJETA GENERAL
 class _ActionCard extends StatelessWidget {
   final String title;
   final String subtitle;

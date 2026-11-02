@@ -221,36 +221,9 @@ class SgcServer {
       );
     });
 
-    // POST /api/citas/<id>/pdf — genera Documento de Responsabilidad
-    router.get('/api/citas/<id>/pdf', (Request req, String idStr) async {
-      try {
-        final id = int.parse(idStr);
-        final cita = await (db.select(db.citas)
-              ..where((t) => t.id.equals(id)))
-            .getSingleOrNull();
-        if (cita == null) return Response.notFound('Cita no encontrada');
-
-
-
-        final result = await PdfService.generarDocumentoResponsabilidad(cita);
-
-        return Response.ok(
-          result.bytes,
-          headers: {
-            'content-type': 'application/pdf',
-            'content-disposition':
-                'attachment; filename="${result.nombreArchivo}"',
-          },
-        );
-      } catch (e) {
-        return Response(500,
-            body: jsonEncode({'error': e.toString()}),
-            headers: {'content-type': 'application/json'});
-      }
-    });
 
     // POST /api/correos/encolar
-    // POST /api/citas/<id>/pdf — genera Documento de Responsabilidad
+    // GET /api/citas/<id>/pdf — genera Documento de Responsabilidad
     router.get('/api/citas/<id>/pdf', (Request req, String idStr) async {
       try {
         final id = int.parse(idStr);
@@ -259,22 +232,26 @@ class SgcServer {
             .getSingleOrNull();
         if (cita == null) return Response.notFound('Cita no encontrada');
 
-        final result = await PdfService.generarDocumentoResponsabilidad(cita);
+        // EXTRAER LOGO DE LA DB
+        final cfgRows = await db.select(db.configuracion).get();
+        final cfg = {for (final r in cfgRows) r.clave: r.valor};
+        final logoBase64 = cfg['empresa_logo_base64'];
+
+        // GENERAR PDF CON LOGO
+        final result = await PdfService.generarDocumentoResponsabilidad(cita, logoBase64: logoBase64);
 
         return Response.ok(
           result.bytes,
           headers: {
             'content-type': 'application/pdf',
-            'content-disposition':
-                'attachment; filename="${result.nombreArchivo}"',
+            'content-disposition': 'attachment; filename="${result.nombreArchivo}"',
           },
         );
       } catch (e) {
-        return Response(500,
-            body: jsonEncode({'error': e.toString()}),
-            headers: {'content-type': 'application/json'});
+        return Response(500, body: jsonEncode({'error': e.toString()}), headers: {'content-type': 'application/json'});
       }
     });
+
 
     router.post('/api/correos/encolar', (Request req) async {
       try {

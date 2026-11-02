@@ -79,8 +79,15 @@ class CorreosTab extends ConsumerWidget {
                     padding: const EdgeInsets.only(top: 4),
                     child: Row(
                       children: [
-                        Text('Para: ${correo.destinatario}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                        const Spacer(),
+                        Expanded(
+                          child: Text(
+                            'Para: ${correo.destinatario}', 
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Text(dateFmt.format(DateTime.fromMillisecondsSinceEpoch(correo.programadoAt)), style: const TextStyle(fontSize: 12)),
                       ],
                     ),
@@ -160,7 +167,7 @@ class _InfoRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 140,
+            width: 120,
             child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
           ),
           Expanded(

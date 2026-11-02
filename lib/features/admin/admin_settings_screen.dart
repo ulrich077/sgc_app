@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart' as cp;
@@ -11,6 +13,7 @@ import '../../core/providers/database_provider.dart';
 import '../../core/providers/theme_colors_provider.dart';
 import '../../core/utils/dialogs.dart';
 import '../../data/database/app_database.dart';
+import '../citas/widgets/drop_zone.dart'; // Reutilizamos el DropZone
 import 'correos_tab.dart';
 import 'smtp_config_tab.dart';
 
@@ -24,10 +27,8 @@ class AdminSettingsScreen extends ConsumerStatefulWidget {
 class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   int _selectedIndex = 0;
 
-  // Lista de opciones del menú lateral de ajustes
   final List<Map<String, dynamic>> _menu = [
     {'title': 'Apariencia', 'icon': Icons.palette_outlined, 'type': 'colors'},
-    {'title': 'Modo Servidor', 'icon': Icons.dns_outlined, 'type': 'server'},
     {'title': 'Correo de Prueba', 'icon': Icons.mark_email_unread_outlined, 'type': 'template', 'clave': 'plantilla_prueba'},
     {'title': 'Correo de Reagenda', 'icon': Icons.calendar_today_outlined, 'type': 'template', 'clave': 'plantilla_reagenda'},
     {'title': 'Correo Final', 'icon': Icons.attachment_outlined, 'type': 'template', 'clave': 'plantilla_final'},
@@ -48,16 +49,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7F9),
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Ajustes del sistema', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            Text(
-              '${auth.nombreCompleto ?? ''} (${auth.rolNombre ?? ''})',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-          ],
-        ),
+        title: const Text('Ajustes del sistema', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -79,7 +71,6 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // MENÚ LATERAL (Maestro)
             SizedBox(
               width: 280,
               child: Card(
@@ -102,19 +93,8 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
                         color: isSelected ? AppColors.primary.withValues(alpha: 0.1) : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                         child: ListTile(
-                          leading: Icon(
-                            item['icon'],
-                            color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                            size: 20,
-                          ),
-                          title: Text(
-                            item['title'],
-                            style: TextStyle(
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                              color: isSelected ? AppColors.primary : AppColors.textPrimary,
-                              fontSize: 14,
-                            ),
-                          ),
+                          leading: Icon(item['icon'], color: isSelected ? AppColors.primary : AppColors.textSecondary, size: 20),
+                          title: Text(item['title'], style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? AppColors.primary : AppColors.textPrimary, fontSize: 14)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           onTap: () => setState(() => _selectedIndex = index),
                         ),
@@ -125,8 +105,6 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
               ),
             ),
             const SizedBox(width: AppSizes.xl),
-
-            // ÁREA DE CONTENIDO (Detalle)
             Expanded(
               child: Card(
                 elevation: 0,
@@ -150,15 +128,13 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   Widget _buildContent() {
     final item = _menu[_selectedIndex];
     if (item['type'] == 'colors') return const _ColorPanelWrapper();
-    if (item['type'] == 'server') return const _ServerModePanel();
     if (item['type'] == 'template') return _PlantillaEditor(clave: item['clave'], titulo: item['title']);
-    if (item['type'] == 'smtp') return const SmtpConfigTab(); // Tu widget existente
-    if (item['type'] == 'queue') return const CorreosTab(); // Tu widget existente
+    if (item['type'] == 'smtp') return const SmtpConfigTab();
+    if (item['type'] == 'queue') return const CorreosTab();
     return const SizedBox();
   }
 }
 
-// --- PANEL DE COLORES ---
 class _ColorPanelWrapper extends ConsumerStatefulWidget {
   const _ColorPanelWrapper();
   @override
@@ -168,6 +144,7 @@ class _ColorPanelWrapper extends ConsumerStatefulWidget {
 class _ColorPanelWrapperState extends ConsumerState<_ColorPanelWrapper> {
   late Color _primary;
   late Color _secondary;
+  String? _logoBase64;
   bool _saving = false;
   bool _loaded = false;
 
@@ -178,23 +155,30 @@ class _ColorPanelWrapperState extends ConsumerState<_ColorPanelWrapper> {
   }
 
   Future<void> _loadColors() async {
+    final db = ref.read(databaseProvider);
     final colors = ref.read(themeColorsProvider).maybeWhen(data: (c) => c, orElse: () => ThemeColors.defaults);
+    final logoRow = await (db.select(db.configuracion)..where((t) => t.clave.equals('empresa_logo_base64'))).getSingleOrNull();
+    
     setState(() {
       _primary = colors.primary;
       _secondary = colors.secondary;
+      _logoBase64 = logoRow?.valor;
       _loaded = true;
     });
   }
+
 
   Future<void> _save() async {
     setState(() => _saving = true);
     final db = ref.read(databaseProvider);
     await _upsert(db, 'color_primary', colorToHex(_primary));
     await _upsert(db, 'color_secondary', colorToHex(_secondary));
+    if (_logoBase64 != null) await _upsert(db, 'empresa_logo_base64', _logoBase64!);
+    
     ref.invalidate(themeColorsProvider);
     if (!mounted) return;
     setState(() => _saving = false);
-    await AppDialogs.success(context, 'Colores guardados y aplicados');
+    await AppDialogs.success(context, 'Apariencia y logo guardados correctamente.');
   }
 
   Future<void> _upsert(AppDatabase db, String clave, String valor) async {
@@ -212,8 +196,11 @@ class _ColorPanelWrapperState extends ConsumerState<_ColorPanelWrapper> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Personaliza los colores principales de la aplicación.', style: TextStyle(color: AppColors.textSecondary)),
+        const Text('Colores y Logo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        const SizedBox(height: AppSizes.sm),
+        const Text('Personaliza los colores y el logo de la institución.', style: TextStyle(color: AppColors.textSecondary)),
         const SizedBox(height: AppSizes.xl),
+        
         Row(
           children: [
             _ColorSwatch(label: 'Color Primario', color: _primary, onTap: () => _pickColor(true)),
@@ -221,6 +208,61 @@ class _ColorPanelWrapperState extends ConsumerState<_ColorPanelWrapper> {
             _ColorSwatch(label: 'Color Secundario', color: _secondary, onTap: () => _pickColor(false)),
           ],
         ),
+        const SizedBox(height: AppSizes.xl),
+
+        const Text('Logo de la Institución', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        const SizedBox(height: AppSizes.sm),
+        
+        // DISEÑO PREMIUM DE LOGO CON DRAG & DROP
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_logoBase64 != null && _logoBase64!.isNotEmpty)
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    base64Decode(_logoBase64!),
+                    fit: BoxFit.contain,
+                    errorBuilder: (ctx, err, stack) => const Center(child: Text('Error de imagen')),
+                  ),
+                ),
+              )
+            else
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: const Icon(Icons.image_outlined, color: Colors.grey, size: 40),
+              ),
+            const SizedBox(width: AppSizes.xl),
+            Expanded(
+              child: DropZone(
+                titulo: 'Arrastra aquí el logo',
+                subtitulo: 'O haz clic para buscarlo en tu equipo. Formato PNG o JPG.',
+                icono: Icons.upload_file,
+                onFileDropped: (path) async {
+                  final file = File(path);
+                  final bytes = await file.readAsBytes();
+                  setState(() => _logoBase64 = base64Encode(bytes));
+                },
+              ),
+            ),
+          ],
+        ),
+        
         const Spacer(),
         Align(
           alignment: Alignment.centerRight,
@@ -228,7 +270,7 @@ class _ColorPanelWrapperState extends ConsumerState<_ColorPanelWrapper> {
             style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
             onPressed: _saving ? null : _save,
             icon: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save),
-            label: const Text('Guardar Apariencia'),
+            label: const Text('Guardar Cambios'),
           ),
         ),
       ],
@@ -241,21 +283,12 @@ class _ColorPanelWrapperState extends ConsumerState<_ColorPanelWrapper> {
       context: context,
       builder: (dialogCtx) => AlertDialog(
         title: const Text('Seleccionar Color'),
-        content: SingleChildScrollView(
-          child: cp.ColorPicker(
-            pickerColor: temp,
-            onColorChanged: (c) => temp = c,
-            enableAlpha: false,
-          ),
-        ),
+        content: SingleChildScrollView(child: cp.ColorPicker(pickerColor: temp, onColorChanged: (c) => temp = c, enableAlpha: false)),
         actions: [
           TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('Cancelar')),
           FilledButton(
             onPressed: () {
-              setState(() {
-                if (isPrimary) { _primary = temp; }
-                else { _secondary = temp; }
-              });
+              setState(() { if (isPrimary) { _primary = temp; } else { _secondary = temp; } });
               Navigator.of(dialogCtx).pop();
             },
             child: const Text('Aplicar'),
@@ -299,7 +332,6 @@ class _ColorSwatch extends StatelessWidget {
   }
 }
 
-// --- EDITOR DE PLANTILLAS ---
 class _PlantillaEditor extends ConsumerStatefulWidget {
   final String clave;
   final String titulo;
@@ -353,19 +385,22 @@ class _PlantillaEditorState extends ConsumerState<_PlantillaEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSizes.md,
+          runSpacing: AppSizes.sm,
           children: [
-            Text(widget.titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(
+              widget.titulo, 
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text('Modo HTML', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                Switch(
-                  value: _isHtml,
-                  onChanged: (v) => setState(() => _isHtml = v),
-                  activeThumbColor: AppColors.primary,
-                ),
-                const SizedBox(width: AppSizes.md),
+                Switch(value: _isHtml, onChanged: (v) => setState(() => _isHtml = v), activeThumbColor: AppColors.primary),
+                const SizedBox(width: AppSizes.sm),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
                   onPressed: _saving ? null : _save,
@@ -393,112 +428,8 @@ class _PlantillaEditorState extends ConsumerState<_PlantillaEditor> {
                 fontSize: 14,
                 color: _isHtml ? Colors.greenAccent : AppColors.textPrimary,
               ),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.all(16),
-              ),
+              decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.all(16)),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ServerModePanel extends ConsumerStatefulWidget {
-  const _ServerModePanel();
-  @override
-  ConsumerState<_ServerModePanel> createState() => _ServerModePanelState();
-}
-
-class _ServerModePanelState extends ConsumerState<_ServerModePanel> {
-  bool _isServer = false;
-  bool _loading = true;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final db = ref.read(databaseProvider);
-    final row = await (db.select(db.configuracion)..where((t) => t.clave.equals('es_servidor'))).getSingleOrNull();
-    if (mounted) {
-      setState(() {
-        _isServer = row?.valor == 'true';
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _save(bool value) async {
-    setState(() { _isServer = value; _saving = true; });
-    final db = ref.read(databaseProvider);
-    final existing = await (db.select(db.configuracion)..where((t) => t.clave.equals('es_servidor'))).getSingleOrNull();
-    
-    if (existing == null) {
-      await db.into(db.configuracion).insert(ConfiguracionCompanion.insert(clave: 'es_servidor', valor: Value(value.toString()), tipo: const Value('bool')));
-    } else {
-      await (db.update(db.configuracion)..where((t) => t.clave.equals('es_servidor'))).write(ConfiguracionCompanion(valor: Value(value.toString())));
-    }
-    
-    if (mounted) {
-      setState(() => _saving = false);
-      await AppDialogs.success(context, 'Modo de red actualizado a: ${value ? 'Servidor' : 'Cliente'}');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Configuración de Red', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-        const SizedBox(height: AppSizes.sm),
-        const Text(
-          'Define si este equipo actuará como servidor central (base de datos y correos) o como cliente conectado a otro servidor.',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: AppSizes.xl),
-        Container(
-          padding: const EdgeInsets.all(AppSizes.lg),
-          decoration: BoxDecoration(
-            color: _isServer ? AppColors.primary.withValues(alpha: 0.05) : Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _isServer ? AppColors.primary.withValues(alpha: 0.3) : Colors.grey.shade300),
-          ),
-          child: Row(
-            children: [
-              Icon(_isServer ? Icons.dns : Icons.computer, color: _isServer ? AppColors.primary : Colors.grey, size: 32),
-              const SizedBox(width: AppSizes.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isServer ? 'Este equipo es el Servidor' : 'Este equipo es un Cliente',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _isServer 
-                          ? 'Se encargará de la base de datos central y del envío de correos (SMTP).' 
-                          : 'Se conectará al servidor central para sincronizar los datos.',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: _isServer,
-                onChanged: _saving ? null : _save,
-                activeThumbColor: AppColors.primary,
-              ),
-            ],
           ),
         ),
       ],
