@@ -29,6 +29,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
 
   final List<Map<String, dynamic>> _menu = [
     {'title': 'Apariencia', 'icon': Icons.palette_outlined, 'type': 'colors'},
+    {'title': 'Agenda', 'icon': Icons.calendar_month, 'type': 'agenda'},
     {'title': 'Correo de Prueba', 'icon': Icons.mark_email_unread_outlined, 'type': 'template', 'clave': 'plantilla_prueba'},
     {'title': 'Correo de Reagenda', 'icon': Icons.calendar_today_outlined, 'type': 'template', 'clave': 'plantilla_reagenda'},
     {'title': 'Correo Final', 'icon': Icons.attachment_outlined, 'type': 'template', 'clave': 'plantilla_final'},
@@ -128,6 +129,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   Widget _buildContent() {
     final item = _menu[_selectedIndex];
     if (item['type'] == 'colors') return const _ColorPanelWrapper();
+    if (item['type'] == 'agenda') return const _AgendaPanel();
     if (item['type'] == 'template') return _PlantillaEditor(clave: item['clave'], titulo: item['title']);
     if (item['type'] == 'smtp') return const SmtpConfigTab();
     if (item['type'] == 'queue') return const CorreosTab();
@@ -430,6 +432,111 @@ class _PlantillaEditorState extends ConsumerState<_PlantillaEditor> {
               ),
               decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.all(16)),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AgendaPanel extends ConsumerStatefulWidget {
+  const _AgendaPanel();
+  @override
+  ConsumerState<_AgendaPanel> createState() => _AgendaPanelState();
+}
+
+class _AgendaPanelState extends ConsumerState<_AgendaPanel> {
+  final _ctrlMaxCitas = TextEditingController();
+  String _intervalo = '30';
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final db = ref.read(databaseProvider);
+    final rows = await db.select(db.configuracion).get();
+    final cfg = {for (final r in rows) r.clave: r.valor};
+    
+    if (mounted) {
+      setState(() {
+        _ctrlMaxCitas.text = cfg['max_citas_por_hora'] ?? '2';
+        _intervalo = cfg['intervalo_minutos'] ?? '30';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final db = ref.read(databaseProvider);
+    
+    await _upsert(db, 'max_citas_por_hora', _ctrlMaxCitas.text.trim());
+    await _upsert(db, 'intervalo_minutos', _intervalo);
+
+    if (mounted) {
+      setState(() => _saving = false);
+      await AppDialogs.success(context, 'Configuración de agenda guardada.');
+    }
+  }
+
+  Future<void> _upsert(AppDatabase db, String clave, String valor) async {
+    final existing = await (db.select(db.configuracion)..where((t) => t.clave.equals(clave))).getSingleOrNull();
+    if (existing == null) {
+      await db.into(db.configuracion).insert(ConfiguracionCompanion.insert(clave: clave, valor: Value(valor), tipo: const Value('string')));
+    } else {
+      await (db.update(db.configuracion)..where((t) => t.clave.equals(clave))).write(ConfiguracionCompanion(valor: Value(valor)));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Configuración de Agenda', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        const SizedBox(height: AppSizes.sm),
+        const Text('Define el intervalo de tiempo y el máximo de citas por bloque.', style: TextStyle(color: AppColors.textSecondary)),
+        const SizedBox(height: AppSizes.xl),
+        
+        Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: _intervalo,
+                decoration: const InputDecoration(labelText: 'Intervalo entre citas', border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: '15', child: Text('Cada 15 minutos')),
+                  DropdownMenuItem(value: '30', child: Text('Cada 30 minutos')),
+                  DropdownMenuItem(value: '45', child: Text('Cada 45 minutos')),
+                ],
+                onChanged: (v) => setState(() => _intervalo = v!),
+              ),
+            ),
+            const SizedBox(width: AppSizes.md),
+            Expanded(
+              child: TextField(
+                controller: _ctrlMaxCitas,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Máximo de citas por bloque', border: OutlineInputBorder()),
+              ),
+            ),
+          ],
+        ),
+        
+        const Spacer(),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+            onPressed: _saving ? null : _save,
+            icon: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save),
+            label: const Text('Guardar Agenda'),
           ),
         ),
       ],

@@ -8,6 +8,7 @@ import '../../correos/data/correos_repository.dart';
 import '../../correos/domain/correo_tipo.dart';
 import '../../correos/services/email_dispatcher.dart';
 import '../domain/cita_estado.dart';
+import 'eventos_repository.dart';
 
 class CitasRepository {
   final AppDatabase _db;
@@ -61,6 +62,13 @@ class CitasRepository {
     String? categoriaMotivoReagenda,
     String? notas,
     required int creadaPor,
+    String? numeroContrato,
+    String? puesto,
+    String? salario,
+    String? ubicacion,
+    String? ubicacionEspecifica,
+    String? fechaInicio,
+    String? fechaFin,
   }) async {
     final uuid = const Uuid().v4();
     final token = const Uuid().v4().replaceAll('-', '');
@@ -88,6 +96,13 @@ class CitasRepository {
         personaCorreo: personaCorreo,
         personaDpi: Value(personaDpi),
         personaTelefono: Value(personaTelefono),
+        numeroContrato: Value(numeroContrato),
+        puesto: Value(puesto),
+        salario: Value(salario),
+        ubicacion: Value(ubicacion),
+        ubicacionEspecifica: Value(ubicacionEspecifica),
+        fechaInicio: Value(fechaInicio),
+        fechaFin: Value(fechaFin),
         fechaHoraFirma: fechaSegundos,
         estado: Value(CitaEstado.citaCreada.dbValue),
         tokenConfirmacion: Value(token),
@@ -211,16 +226,31 @@ class CitasRepository {
     required CitaEstado nuevoEstado,
     required int userId,
   }) async {
+    // Obtener el estado anterior para el historial
+    final citaAntes = await porId(citaId);
+    final estadoAnterior = citaAntes != null ? CitaEstado.fromDb(citaAntes.estado) : CitaEstado.citaCreada;
+
     if (_esClienteRemoto) {
       await _api!.actualizarCita(citaId, {'estado': nuevoEstado.dbValue, 'userUpdated': userId});
-      return;
+    } else {
+      await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
+        CitasCompanion(
+          estado: Value(nuevoEstado.dbValue),
+          dateUpdated: Value(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+          userUpdated: Value(userId),
+        ),
+      );
     }
-    await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
-      CitasCompanion(
-        estado: Value(nuevoEstado.dbValue),
-        dateUpdated: Value(DateTime.now().millisecondsSinceEpoch ~/ 1000),
-        userUpdated: Value(userId),
-      ),
+
+    // Registrar el evento en el historial
+    await EventosRepository(_db).registrar(
+      citaId: citaId,
+      tipoEvento: 'cambio_estado',
+      detalle: {
+        'anterior': estadoAnterior.label,
+        'nuevo': nuevoEstado.label,
+      },
+      userId: userId,
     );
 
     if (nuevoEstado == CitaEstado.contratoEnviado) {

@@ -1599,6 +1599,81 @@ class $CitasTable extends Citas with TableInfo<$CitasTable, Cita> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _numeroContratoMeta = const VerificationMeta(
+    'numeroContrato',
+  );
+  @override
+  late final GeneratedColumn<String> numeroContrato = GeneratedColumn<String>(
+    'numero_contrato',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _puestoMeta = const VerificationMeta('puesto');
+  @override
+  late final GeneratedColumn<String> puesto = GeneratedColumn<String>(
+    'puesto',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _salarioMeta = const VerificationMeta(
+    'salario',
+  );
+  @override
+  late final GeneratedColumn<String> salario = GeneratedColumn<String>(
+    'salario',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ubicacionMeta = const VerificationMeta(
+    'ubicacion',
+  );
+  @override
+  late final GeneratedColumn<String> ubicacion = GeneratedColumn<String>(
+    'ubicacion',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ubicacionEspecificaMeta =
+      const VerificationMeta('ubicacionEspecifica');
+  @override
+  late final GeneratedColumn<String> ubicacionEspecifica =
+      GeneratedColumn<String>(
+        'ubicacion_especifica',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _fechaInicioMeta = const VerificationMeta(
+    'fechaInicio',
+  );
+  @override
+  late final GeneratedColumn<String> fechaInicio = GeneratedColumn<String>(
+    'fecha_inicio',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fechaFinMeta = const VerificationMeta(
+    'fechaFin',
+  );
+  @override
+  late final GeneratedColumn<String> fechaFin = GeneratedColumn<String>(
+    'fecha_fin',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _fechaHoraFirmaMeta = const VerificationMeta(
     'fechaHoraFirma',
   );
@@ -1816,6 +1891,13 @@ class $CitasTable extends Citas with TableInfo<$CitasTable, Cita> {
     personaDpi,
     personaCorreo,
     personaTelefono,
+    numeroContrato,
+    puesto,
+    salario,
+    ubicacion,
+    ubicacionEspecifica,
+    fechaInicio,
+    fechaFin,
     fechaHoraFirma,
     estado,
     tokenConfirmacion,
@@ -1896,6 +1978,57 @@ class $CitasTable extends Citas with TableInfo<$CitasTable, Cita> {
           data['persona_telefono']!,
           _personaTelefonoMeta,
         ),
+      );
+    }
+    if (data.containsKey('numero_contrato')) {
+      context.handle(
+        _numeroContratoMeta,
+        numeroContrato.isAcceptableOrUnknown(
+          data['numero_contrato']!,
+          _numeroContratoMeta,
+        ),
+      );
+    }
+    if (data.containsKey('puesto')) {
+      context.handle(
+        _puestoMeta,
+        puesto.isAcceptableOrUnknown(data['puesto']!, _puestoMeta),
+      );
+    }
+    if (data.containsKey('salario')) {
+      context.handle(
+        _salarioMeta,
+        salario.isAcceptableOrUnknown(data['salario']!, _salarioMeta),
+      );
+    }
+    if (data.containsKey('ubicacion')) {
+      context.handle(
+        _ubicacionMeta,
+        ubicacion.isAcceptableOrUnknown(data['ubicacion']!, _ubicacionMeta),
+      );
+    }
+    if (data.containsKey('ubicacion_especifica')) {
+      context.handle(
+        _ubicacionEspecificaMeta,
+        ubicacionEspecifica.isAcceptableOrUnknown(
+          data['ubicacion_especifica']!,
+          _ubicacionEspecificaMeta,
+        ),
+      );
+    }
+    if (data.containsKey('fecha_inicio')) {
+      context.handle(
+        _fechaInicioMeta,
+        fechaInicio.isAcceptableOrUnknown(
+          data['fecha_inicio']!,
+          _fechaInicioMeta,
+        ),
+      );
+    }
+    if (data.containsKey('fecha_fin')) {
+      context.handle(
+        _fechaFinMeta,
+        fechaFin.isAcceptableOrUnknown(data['fecha_fin']!, _fechaFinMeta),
       );
     }
     if (data.containsKey('fecha_hora_firma')) {
@@ -2085,6 +2218,34 @@ class $CitasTable extends Citas with TableInfo<$CitasTable, Cita> {
         DriftSqlType.string,
         data['${effectivePrefix}persona_telefono'],
       ),
+      numeroContrato: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}numero_contrato'],
+      ),
+      puesto: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}puesto'],
+      ),
+      salario: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}salario'],
+      ),
+      ubicacion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ubicacion'],
+      ),
+      ubicacionEspecifica: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}ubicacion_especifica'],
+      ),
+      fechaInicio: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fecha_inicio'],
+      ),
+      fechaFin: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fecha_fin'],
+      ),
       fechaHoraFirma: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}fecha_hora_firma'],
@@ -2173,6 +2334,13 @@ class Cita extends DataClass implements Insertable<Cita> {
   final String? personaDpi;
   final String personaCorreo;
   final String? personaTelefono;
+  final String? numeroContrato;
+  final String? puesto;
+  final String? salario;
+  final String? ubicacion;
+  final String? ubicacionEspecifica;
+  final String? fechaInicio;
+  final String? fechaFin;
   final int fechaHoraFirma;
   final String estado;
   final String? tokenConfirmacion;
@@ -2198,6 +2366,13 @@ class Cita extends DataClass implements Insertable<Cita> {
     this.personaDpi,
     required this.personaCorreo,
     this.personaTelefono,
+    this.numeroContrato,
+    this.puesto,
+    this.salario,
+    this.ubicacion,
+    this.ubicacionEspecifica,
+    this.fechaInicio,
+    this.fechaFin,
     required this.fechaHoraFirma,
     required this.estado,
     this.tokenConfirmacion,
@@ -2229,6 +2404,27 @@ class Cita extends DataClass implements Insertable<Cita> {
     map['persona_correo'] = Variable<String>(personaCorreo);
     if (!nullToAbsent || personaTelefono != null) {
       map['persona_telefono'] = Variable<String>(personaTelefono);
+    }
+    if (!nullToAbsent || numeroContrato != null) {
+      map['numero_contrato'] = Variable<String>(numeroContrato);
+    }
+    if (!nullToAbsent || puesto != null) {
+      map['puesto'] = Variable<String>(puesto);
+    }
+    if (!nullToAbsent || salario != null) {
+      map['salario'] = Variable<String>(salario);
+    }
+    if (!nullToAbsent || ubicacion != null) {
+      map['ubicacion'] = Variable<String>(ubicacion);
+    }
+    if (!nullToAbsent || ubicacionEspecifica != null) {
+      map['ubicacion_especifica'] = Variable<String>(ubicacionEspecifica);
+    }
+    if (!nullToAbsent || fechaInicio != null) {
+      map['fecha_inicio'] = Variable<String>(fechaInicio);
+    }
+    if (!nullToAbsent || fechaFin != null) {
+      map['fecha_fin'] = Variable<String>(fechaFin);
     }
     map['fecha_hora_firma'] = Variable<int>(fechaHoraFirma);
     map['estado'] = Variable<String>(estado);
@@ -2287,6 +2483,27 @@ class Cita extends DataClass implements Insertable<Cita> {
       personaTelefono: personaTelefono == null && nullToAbsent
           ? const Value.absent()
           : Value(personaTelefono),
+      numeroContrato: numeroContrato == null && nullToAbsent
+          ? const Value.absent()
+          : Value(numeroContrato),
+      puesto: puesto == null && nullToAbsent
+          ? const Value.absent()
+          : Value(puesto),
+      salario: salario == null && nullToAbsent
+          ? const Value.absent()
+          : Value(salario),
+      ubicacion: ubicacion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ubicacion),
+      ubicacionEspecifica: ubicacionEspecifica == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ubicacionEspecifica),
+      fechaInicio: fechaInicio == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaInicio),
+      fechaFin: fechaFin == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fechaFin),
       fechaHoraFirma: Value(fechaHoraFirma),
       estado: Value(estado),
       tokenConfirmacion: tokenConfirmacion == null && nullToAbsent
@@ -2342,6 +2559,15 @@ class Cita extends DataClass implements Insertable<Cita> {
       personaDpi: serializer.fromJson<String?>(json['personaDpi']),
       personaCorreo: serializer.fromJson<String>(json['personaCorreo']),
       personaTelefono: serializer.fromJson<String?>(json['personaTelefono']),
+      numeroContrato: serializer.fromJson<String?>(json['numeroContrato']),
+      puesto: serializer.fromJson<String?>(json['puesto']),
+      salario: serializer.fromJson<String?>(json['salario']),
+      ubicacion: serializer.fromJson<String?>(json['ubicacion']),
+      ubicacionEspecifica: serializer.fromJson<String?>(
+        json['ubicacionEspecifica'],
+      ),
+      fechaInicio: serializer.fromJson<String?>(json['fechaInicio']),
+      fechaFin: serializer.fromJson<String?>(json['fechaFin']),
       fechaHoraFirma: serializer.fromJson<int>(json['fechaHoraFirma']),
       estado: serializer.fromJson<String>(json['estado']),
       tokenConfirmacion: serializer.fromJson<String?>(
@@ -2386,6 +2612,13 @@ class Cita extends DataClass implements Insertable<Cita> {
       'personaDpi': serializer.toJson<String?>(personaDpi),
       'personaCorreo': serializer.toJson<String>(personaCorreo),
       'personaTelefono': serializer.toJson<String?>(personaTelefono),
+      'numeroContrato': serializer.toJson<String?>(numeroContrato),
+      'puesto': serializer.toJson<String?>(puesto),
+      'salario': serializer.toJson<String?>(salario),
+      'ubicacion': serializer.toJson<String?>(ubicacion),
+      'ubicacionEspecifica': serializer.toJson<String?>(ubicacionEspecifica),
+      'fechaInicio': serializer.toJson<String?>(fechaInicio),
+      'fechaFin': serializer.toJson<String?>(fechaFin),
       'fechaHoraFirma': serializer.toJson<int>(fechaHoraFirma),
       'estado': serializer.toJson<String>(estado),
       'tokenConfirmacion': serializer.toJson<String?>(tokenConfirmacion),
@@ -2416,6 +2649,13 @@ class Cita extends DataClass implements Insertable<Cita> {
     Value<String?> personaDpi = const Value.absent(),
     String? personaCorreo,
     Value<String?> personaTelefono = const Value.absent(),
+    Value<String?> numeroContrato = const Value.absent(),
+    Value<String?> puesto = const Value.absent(),
+    Value<String?> salario = const Value.absent(),
+    Value<String?> ubicacion = const Value.absent(),
+    Value<String?> ubicacionEspecifica = const Value.absent(),
+    Value<String?> fechaInicio = const Value.absent(),
+    Value<String?> fechaFin = const Value.absent(),
     int? fechaHoraFirma,
     String? estado,
     Value<String?> tokenConfirmacion = const Value.absent(),
@@ -2443,6 +2683,17 @@ class Cita extends DataClass implements Insertable<Cita> {
     personaTelefono: personaTelefono.present
         ? personaTelefono.value
         : this.personaTelefono,
+    numeroContrato: numeroContrato.present
+        ? numeroContrato.value
+        : this.numeroContrato,
+    puesto: puesto.present ? puesto.value : this.puesto,
+    salario: salario.present ? salario.value : this.salario,
+    ubicacion: ubicacion.present ? ubicacion.value : this.ubicacion,
+    ubicacionEspecifica: ubicacionEspecifica.present
+        ? ubicacionEspecifica.value
+        : this.ubicacionEspecifica,
+    fechaInicio: fechaInicio.present ? fechaInicio.value : this.fechaInicio,
+    fechaFin: fechaFin.present ? fechaFin.value : this.fechaFin,
     fechaHoraFirma: fechaHoraFirma ?? this.fechaHoraFirma,
     estado: estado ?? this.estado,
     tokenConfirmacion: tokenConfirmacion.present
@@ -2490,6 +2741,19 @@ class Cita extends DataClass implements Insertable<Cita> {
       personaTelefono: data.personaTelefono.present
           ? data.personaTelefono.value
           : this.personaTelefono,
+      numeroContrato: data.numeroContrato.present
+          ? data.numeroContrato.value
+          : this.numeroContrato,
+      puesto: data.puesto.present ? data.puesto.value : this.puesto,
+      salario: data.salario.present ? data.salario.value : this.salario,
+      ubicacion: data.ubicacion.present ? data.ubicacion.value : this.ubicacion,
+      ubicacionEspecifica: data.ubicacionEspecifica.present
+          ? data.ubicacionEspecifica.value
+          : this.ubicacionEspecifica,
+      fechaInicio: data.fechaInicio.present
+          ? data.fechaInicio.value
+          : this.fechaInicio,
+      fechaFin: data.fechaFin.present ? data.fechaFin.value : this.fechaFin,
       fechaHoraFirma: data.fechaHoraFirma.present
           ? data.fechaHoraFirma.value
           : this.fechaHoraFirma,
@@ -2548,6 +2812,13 @@ class Cita extends DataClass implements Insertable<Cita> {
           ..write('personaDpi: $personaDpi, ')
           ..write('personaCorreo: $personaCorreo, ')
           ..write('personaTelefono: $personaTelefono, ')
+          ..write('numeroContrato: $numeroContrato, ')
+          ..write('puesto: $puesto, ')
+          ..write('salario: $salario, ')
+          ..write('ubicacion: $ubicacion, ')
+          ..write('ubicacionEspecifica: $ubicacionEspecifica, ')
+          ..write('fechaInicio: $fechaInicio, ')
+          ..write('fechaFin: $fechaFin, ')
           ..write('fechaHoraFirma: $fechaHoraFirma, ')
           ..write('estado: $estado, ')
           ..write('tokenConfirmacion: $tokenConfirmacion, ')
@@ -2578,6 +2849,13 @@ class Cita extends DataClass implements Insertable<Cita> {
     personaDpi,
     personaCorreo,
     personaTelefono,
+    numeroContrato,
+    puesto,
+    salario,
+    ubicacion,
+    ubicacionEspecifica,
+    fechaInicio,
+    fechaFin,
     fechaHoraFirma,
     estado,
     tokenConfirmacion,
@@ -2607,6 +2885,13 @@ class Cita extends DataClass implements Insertable<Cita> {
           other.personaDpi == this.personaDpi &&
           other.personaCorreo == this.personaCorreo &&
           other.personaTelefono == this.personaTelefono &&
+          other.numeroContrato == this.numeroContrato &&
+          other.puesto == this.puesto &&
+          other.salario == this.salario &&
+          other.ubicacion == this.ubicacion &&
+          other.ubicacionEspecifica == this.ubicacionEspecifica &&
+          other.fechaInicio == this.fechaInicio &&
+          other.fechaFin == this.fechaFin &&
           other.fechaHoraFirma == this.fechaHoraFirma &&
           other.estado == this.estado &&
           other.tokenConfirmacion == this.tokenConfirmacion &&
@@ -2634,6 +2919,13 @@ class CitasCompanion extends UpdateCompanion<Cita> {
   final Value<String?> personaDpi;
   final Value<String> personaCorreo;
   final Value<String?> personaTelefono;
+  final Value<String?> numeroContrato;
+  final Value<String?> puesto;
+  final Value<String?> salario;
+  final Value<String?> ubicacion;
+  final Value<String?> ubicacionEspecifica;
+  final Value<String?> fechaInicio;
+  final Value<String?> fechaFin;
   final Value<int> fechaHoraFirma;
   final Value<String> estado;
   final Value<String?> tokenConfirmacion;
@@ -2659,6 +2951,13 @@ class CitasCompanion extends UpdateCompanion<Cita> {
     this.personaDpi = const Value.absent(),
     this.personaCorreo = const Value.absent(),
     this.personaTelefono = const Value.absent(),
+    this.numeroContrato = const Value.absent(),
+    this.puesto = const Value.absent(),
+    this.salario = const Value.absent(),
+    this.ubicacion = const Value.absent(),
+    this.ubicacionEspecifica = const Value.absent(),
+    this.fechaInicio = const Value.absent(),
+    this.fechaFin = const Value.absent(),
     this.fechaHoraFirma = const Value.absent(),
     this.estado = const Value.absent(),
     this.tokenConfirmacion = const Value.absent(),
@@ -2685,6 +2984,13 @@ class CitasCompanion extends UpdateCompanion<Cita> {
     this.personaDpi = const Value.absent(),
     required String personaCorreo,
     this.personaTelefono = const Value.absent(),
+    this.numeroContrato = const Value.absent(),
+    this.puesto = const Value.absent(),
+    this.salario = const Value.absent(),
+    this.ubicacion = const Value.absent(),
+    this.ubicacionEspecifica = const Value.absent(),
+    this.fechaInicio = const Value.absent(),
+    this.fechaFin = const Value.absent(),
     required int fechaHoraFirma,
     this.estado = const Value.absent(),
     this.tokenConfirmacion = const Value.absent(),
@@ -2715,6 +3021,13 @@ class CitasCompanion extends UpdateCompanion<Cita> {
     Expression<String>? personaDpi,
     Expression<String>? personaCorreo,
     Expression<String>? personaTelefono,
+    Expression<String>? numeroContrato,
+    Expression<String>? puesto,
+    Expression<String>? salario,
+    Expression<String>? ubicacion,
+    Expression<String>? ubicacionEspecifica,
+    Expression<String>? fechaInicio,
+    Expression<String>? fechaFin,
     Expression<int>? fechaHoraFirma,
     Expression<String>? estado,
     Expression<String>? tokenConfirmacion,
@@ -2741,6 +3054,14 @@ class CitasCompanion extends UpdateCompanion<Cita> {
       if (personaDpi != null) 'persona_dpi': personaDpi,
       if (personaCorreo != null) 'persona_correo': personaCorreo,
       if (personaTelefono != null) 'persona_telefono': personaTelefono,
+      if (numeroContrato != null) 'numero_contrato': numeroContrato,
+      if (puesto != null) 'puesto': puesto,
+      if (salario != null) 'salario': salario,
+      if (ubicacion != null) 'ubicacion': ubicacion,
+      if (ubicacionEspecifica != null)
+        'ubicacion_especifica': ubicacionEspecifica,
+      if (fechaInicio != null) 'fecha_inicio': fechaInicio,
+      if (fechaFin != null) 'fecha_fin': fechaFin,
       if (fechaHoraFirma != null) 'fecha_hora_firma': fechaHoraFirma,
       if (estado != null) 'estado': estado,
       if (tokenConfirmacion != null) 'token_confirmacion': tokenConfirmacion,
@@ -2775,6 +3096,13 @@ class CitasCompanion extends UpdateCompanion<Cita> {
     Value<String?>? personaDpi,
     Value<String>? personaCorreo,
     Value<String?>? personaTelefono,
+    Value<String?>? numeroContrato,
+    Value<String?>? puesto,
+    Value<String?>? salario,
+    Value<String?>? ubicacion,
+    Value<String?>? ubicacionEspecifica,
+    Value<String?>? fechaInicio,
+    Value<String?>? fechaFin,
     Value<int>? fechaHoraFirma,
     Value<String>? estado,
     Value<String?>? tokenConfirmacion,
@@ -2801,6 +3129,13 @@ class CitasCompanion extends UpdateCompanion<Cita> {
       personaDpi: personaDpi ?? this.personaDpi,
       personaCorreo: personaCorreo ?? this.personaCorreo,
       personaTelefono: personaTelefono ?? this.personaTelefono,
+      numeroContrato: numeroContrato ?? this.numeroContrato,
+      puesto: puesto ?? this.puesto,
+      salario: salario ?? this.salario,
+      ubicacion: ubicacion ?? this.ubicacion,
+      ubicacionEspecifica: ubicacionEspecifica ?? this.ubicacionEspecifica,
+      fechaInicio: fechaInicio ?? this.fechaInicio,
+      fechaFin: fechaFin ?? this.fechaFin,
       fechaHoraFirma: fechaHoraFirma ?? this.fechaHoraFirma,
       estado: estado ?? this.estado,
       tokenConfirmacion: tokenConfirmacion ?? this.tokenConfirmacion,
@@ -2844,6 +3179,27 @@ class CitasCompanion extends UpdateCompanion<Cita> {
     }
     if (personaTelefono.present) {
       map['persona_telefono'] = Variable<String>(personaTelefono.value);
+    }
+    if (numeroContrato.present) {
+      map['numero_contrato'] = Variable<String>(numeroContrato.value);
+    }
+    if (puesto.present) {
+      map['puesto'] = Variable<String>(puesto.value);
+    }
+    if (salario.present) {
+      map['salario'] = Variable<String>(salario.value);
+    }
+    if (ubicacion.present) {
+      map['ubicacion'] = Variable<String>(ubicacion.value);
+    }
+    if (ubicacionEspecifica.present) {
+      map['ubicacion_especifica'] = Variable<String>(ubicacionEspecifica.value);
+    }
+    if (fechaInicio.present) {
+      map['fecha_inicio'] = Variable<String>(fechaInicio.value);
+    }
+    if (fechaFin.present) {
+      map['fecha_fin'] = Variable<String>(fechaFin.value);
     }
     if (fechaHoraFirma.present) {
       map['fecha_hora_firma'] = Variable<int>(fechaHoraFirma.value);
@@ -2919,6 +3275,13 @@ class CitasCompanion extends UpdateCompanion<Cita> {
           ..write('personaDpi: $personaDpi, ')
           ..write('personaCorreo: $personaCorreo, ')
           ..write('personaTelefono: $personaTelefono, ')
+          ..write('numeroContrato: $numeroContrato, ')
+          ..write('puesto: $puesto, ')
+          ..write('salario: $salario, ')
+          ..write('ubicacion: $ubicacion, ')
+          ..write('ubicacionEspecifica: $ubicacionEspecifica, ')
+          ..write('fechaInicio: $fechaInicio, ')
+          ..write('fechaFin: $fechaFin, ')
           ..write('fechaHoraFirma: $fechaHoraFirma, ')
           ..write('estado: $estado, ')
           ..write('tokenConfirmacion: $tokenConfirmacion, ')
@@ -5413,16 +5776,18 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   ];
 }
 
-typedef $$RolesTableCreateCompanionBuilder = RolesCompanion Function({
-  Value<int> id,
-  required String nombre,
-  Value<String?> descripcion,
-});
-typedef $$RolesTableUpdateCompanionBuilder = RolesCompanion Function({
-  Value<int> id,
-  Value<String> nombre,
-  Value<String?> descripcion,
-});
+typedef $$RolesTableCreateCompanionBuilder =
+    RolesCompanion Function({
+      Value<int> id,
+      required String nombre,
+      Value<String?> descripcion,
+    });
+typedef $$RolesTableUpdateCompanionBuilder =
+    RolesCompanion Function({
+      Value<int> id,
+      Value<String> nombre,
+      Value<String?> descripcion,
+    });
 
 final class $$RolesTableReferences
     extends BaseReferences<_$AppDatabase, $RolesTable, Role> {
@@ -5764,32 +6129,34 @@ typedef $$RolesTableProcessedTableManager =
       Role,
       PrefetchHooks Function({bool usuariosRefs, bool permisosRefs})
     >;
-typedef $$UsuariosTableCreateCompanionBuilder = UsuariosCompanion Function({
-  Value<int> id,
-  required String username,
-  required String passwordHash,
-  required String nombreCompleto,
-  required int rolId,
-  Value<bool> activo,
-  Value<int?> userCreation,
-  Value<int?> dateCreation,
-  Value<int?> userUpdated,
-  Value<int?> dateUpdated,
-  Value<bool> isDelete,
-});
-typedef $$UsuariosTableUpdateCompanionBuilder = UsuariosCompanion Function({
-  Value<int> id,
-  Value<String> username,
-  Value<String> passwordHash,
-  Value<String> nombreCompleto,
-  Value<int> rolId,
-  Value<bool> activo,
-  Value<int?> userCreation,
-  Value<int?> dateCreation,
-  Value<int?> userUpdated,
-  Value<int?> dateUpdated,
-  Value<bool> isDelete,
-});
+typedef $$UsuariosTableCreateCompanionBuilder =
+    UsuariosCompanion Function({
+      Value<int> id,
+      required String username,
+      required String passwordHash,
+      required String nombreCompleto,
+      required int rolId,
+      Value<bool> activo,
+      Value<int?> userCreation,
+      Value<int?> dateCreation,
+      Value<int?> userUpdated,
+      Value<int?> dateUpdated,
+      Value<bool> isDelete,
+    });
+typedef $$UsuariosTableUpdateCompanionBuilder =
+    UsuariosCompanion Function({
+      Value<int> id,
+      Value<String> username,
+      Value<String> passwordHash,
+      Value<String> nombreCompleto,
+      Value<int> rolId,
+      Value<bool> activo,
+      Value<int?> userCreation,
+      Value<int?> dateCreation,
+      Value<int?> userUpdated,
+      Value<int?> dateUpdated,
+      Value<bool> isDelete,
+    });
 
 final class $$UsuariosTableReferences
     extends BaseReferences<_$AppDatabase, $UsuariosTable, Usuario> {
@@ -6452,15 +6819,17 @@ class $$UsuariosTableTableManager
                         >
                       >(state) {
                         if (rolId) {
-                          state = state.withJoin(
-                            currentTable: table,
-                            currentColumn: table.rolId,
-                            referencedTable: $$UsuariosTableReferences
-                                ._rolIdTable(db),
-                            referencedColumn: $$UsuariosTableReferences
-                                ._rolIdTable(db)
-                                .id,
-                          ) as T;
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.rolId,
+                                    referencedTable: $$UsuariosTableReferences
+                                        ._rolIdTable(db),
+                                    referencedColumn: $$UsuariosTableReferences
+                                        ._rolIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
                         }
 
                         return state;
@@ -6575,18 +6944,20 @@ typedef $$UsuariosTableProcessedTableManager =
         bool auditoriaRefs,
       })
     >;
-typedef $$PermisosTableCreateCompanionBuilder = PermisosCompanion Function({
-  Value<int> id,
-  required int rolId,
-  required String modulo,
-  required String accion,
-});
-typedef $$PermisosTableUpdateCompanionBuilder = PermisosCompanion Function({
-  Value<int> id,
-  Value<int> rolId,
-  Value<String> modulo,
-  Value<String> accion,
-});
+typedef $$PermisosTableCreateCompanionBuilder =
+    PermisosCompanion Function({
+      Value<int> id,
+      required int rolId,
+      required String modulo,
+      required String accion,
+    });
+typedef $$PermisosTableUpdateCompanionBuilder =
+    PermisosCompanion Function({
+      Value<int> id,
+      Value<int> rolId,
+      Value<String> modulo,
+      Value<String> accion,
+    });
 
 final class $$PermisosTableReferences
     extends BaseReferences<_$AppDatabase, $PermisosTable, Permiso> {
@@ -6827,16 +7198,17 @@ class $$PermisosTableTableManager
                     >
                   >(state) {
                     if (rolId) {
-                      state = state.withJoin(
-                        currentTable: table,
-                        currentColumn: table.rolId,
-                        referencedTable: $$PermisosTableReferences._rolIdTable(
-                          db,
-                        ),
-                        referencedColumn: $$PermisosTableReferences
-                            ._rolIdTable(db)
-                            .id,
-                      ) as T;
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.rolId,
+                                referencedTable: $$PermisosTableReferences
+                                    ._rolIdTable(db),
+                                referencedColumn: $$PermisosTableReferences
+                                    ._rolIdTable(db)
+                                    .id,
+                              )
+                              as T;
                     }
 
                     return state;
@@ -7052,58 +7424,74 @@ typedef $$ConfiguracionTableProcessedTableManager =
       ConfiguracionData,
       PrefetchHooks Function()
     >;
-typedef $$CitasTableCreateCompanionBuilder = CitasCompanion Function({
-  Value<int> id,
-  required String uuidPublico,
-  required String personaNombre,
-  Value<String?> personaDpi,
-  required String personaCorreo,
-  Value<String?> personaTelefono,
-  required int fechaHoraFirma,
-  Value<String> estado,
-  Value<String?> tokenConfirmacion,
-  Value<int?> tokenExpira,
-  Value<int?> confirmadoRecibidoAt,
-  Value<int> reagendadaVeces,
-  Value<String?> motivoUltimaReagenda,
-  Value<String?> categoriaMotivoReagenda,
-  Value<bool> postMortemPresentado,
-  Value<bool> contraloriaPresentada,
-  Value<int?> probidadAperturadaAt,
-  Value<String?> notas,
-  required int creadaPor,
-  Value<int?> userCreation,
-  Value<int?> dateCreation,
-  Value<int?> userUpdated,
-  Value<int?> dateUpdated,
-  Value<bool> isDelete,
-});
-typedef $$CitasTableUpdateCompanionBuilder = CitasCompanion Function({
-  Value<int> id,
-  Value<String> uuidPublico,
-  Value<String> personaNombre,
-  Value<String?> personaDpi,
-  Value<String> personaCorreo,
-  Value<String?> personaTelefono,
-  Value<int> fechaHoraFirma,
-  Value<String> estado,
-  Value<String?> tokenConfirmacion,
-  Value<int?> tokenExpira,
-  Value<int?> confirmadoRecibidoAt,
-  Value<int> reagendadaVeces,
-  Value<String?> motivoUltimaReagenda,
-  Value<String?> categoriaMotivoReagenda,
-  Value<bool> postMortemPresentado,
-  Value<bool> contraloriaPresentada,
-  Value<int?> probidadAperturadaAt,
-  Value<String?> notas,
-  Value<int> creadaPor,
-  Value<int?> userCreation,
-  Value<int?> dateCreation,
-  Value<int?> userUpdated,
-  Value<int?> dateUpdated,
-  Value<bool> isDelete,
-});
+typedef $$CitasTableCreateCompanionBuilder =
+    CitasCompanion Function({
+      Value<int> id,
+      required String uuidPublico,
+      required String personaNombre,
+      Value<String?> personaDpi,
+      required String personaCorreo,
+      Value<String?> personaTelefono,
+      Value<String?> numeroContrato,
+      Value<String?> puesto,
+      Value<String?> salario,
+      Value<String?> ubicacion,
+      Value<String?> ubicacionEspecifica,
+      Value<String?> fechaInicio,
+      Value<String?> fechaFin,
+      required int fechaHoraFirma,
+      Value<String> estado,
+      Value<String?> tokenConfirmacion,
+      Value<int?> tokenExpira,
+      Value<int?> confirmadoRecibidoAt,
+      Value<int> reagendadaVeces,
+      Value<String?> motivoUltimaReagenda,
+      Value<String?> categoriaMotivoReagenda,
+      Value<bool> postMortemPresentado,
+      Value<bool> contraloriaPresentada,
+      Value<int?> probidadAperturadaAt,
+      Value<String?> notas,
+      required int creadaPor,
+      Value<int?> userCreation,
+      Value<int?> dateCreation,
+      Value<int?> userUpdated,
+      Value<int?> dateUpdated,
+      Value<bool> isDelete,
+    });
+typedef $$CitasTableUpdateCompanionBuilder =
+    CitasCompanion Function({
+      Value<int> id,
+      Value<String> uuidPublico,
+      Value<String> personaNombre,
+      Value<String?> personaDpi,
+      Value<String> personaCorreo,
+      Value<String?> personaTelefono,
+      Value<String?> numeroContrato,
+      Value<String?> puesto,
+      Value<String?> salario,
+      Value<String?> ubicacion,
+      Value<String?> ubicacionEspecifica,
+      Value<String?> fechaInicio,
+      Value<String?> fechaFin,
+      Value<int> fechaHoraFirma,
+      Value<String> estado,
+      Value<String?> tokenConfirmacion,
+      Value<int?> tokenExpira,
+      Value<int?> confirmadoRecibidoAt,
+      Value<int> reagendadaVeces,
+      Value<String?> motivoUltimaReagenda,
+      Value<String?> categoriaMotivoReagenda,
+      Value<bool> postMortemPresentado,
+      Value<bool> contraloriaPresentada,
+      Value<int?> probidadAperturadaAt,
+      Value<String?> notas,
+      Value<int> creadaPor,
+      Value<int?> userCreation,
+      Value<int?> dateCreation,
+      Value<int?> userUpdated,
+      Value<int?> dateUpdated,
+      Value<bool> isDelete,
+    });
 
 final class $$CitasTableReferences
     extends BaseReferences<_$AppDatabase, $CitasTable, Cita> {
@@ -7216,6 +7604,41 @@ class $$CitasTableFilterComposer extends Composer<_$AppDatabase, $CitasTable> {
 
   ColumnFilters<String> get personaTelefono => $composableBuilder(
     column: $table.personaTelefono,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get numeroContrato => $composableBuilder(
+    column: $table.numeroContrato,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get puesto => $composableBuilder(
+    column: $table.puesto,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get salario => $composableBuilder(
+    column: $table.salario,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ubicacion => $composableBuilder(
+    column: $table.ubicacion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get ubicacionEspecifica => $composableBuilder(
+    column: $table.ubicacionEspecifica,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fechaInicio => $composableBuilder(
+    column: $table.fechaInicio,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fechaFin => $composableBuilder(
+    column: $table.fechaFin,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7442,6 +7865,41 @@ class $$CitasTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get numeroContrato => $composableBuilder(
+    column: $table.numeroContrato,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get puesto => $composableBuilder(
+    column: $table.puesto,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get salario => $composableBuilder(
+    column: $table.salario,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ubicacion => $composableBuilder(
+    column: $table.ubicacion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get ubicacionEspecifica => $composableBuilder(
+    column: $table.ubicacionEspecifica,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fechaInicio => $composableBuilder(
+    column: $table.fechaInicio,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fechaFin => $composableBuilder(
+    column: $table.fechaFin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get fechaHoraFirma => $composableBuilder(
     column: $table.fechaHoraFirma,
     builder: (column) => ColumnOrderings(column),
@@ -7587,6 +8045,33 @@ class $$CitasTableAnnotationComposer
     column: $table.personaTelefono,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get numeroContrato => $composableBuilder(
+    column: $table.numeroContrato,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get puesto =>
+      $composableBuilder(column: $table.puesto, builder: (column) => column);
+
+  GeneratedColumn<String> get salario =>
+      $composableBuilder(column: $table.salario, builder: (column) => column);
+
+  GeneratedColumn<String> get ubicacion =>
+      $composableBuilder(column: $table.ubicacion, builder: (column) => column);
+
+  GeneratedColumn<String> get ubicacionEspecifica => $composableBuilder(
+    column: $table.ubicacionEspecifica,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get fechaInicio => $composableBuilder(
+    column: $table.fechaInicio,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get fechaFin =>
+      $composableBuilder(column: $table.fechaFin, builder: (column) => column);
 
   GeneratedColumn<int> get fechaHoraFirma => $composableBuilder(
     column: $table.fechaHoraFirma,
@@ -7805,6 +8290,13 @@ class $$CitasTableTableManager
                 Value<String?> personaDpi = const Value.absent(),
                 Value<String> personaCorreo = const Value.absent(),
                 Value<String?> personaTelefono = const Value.absent(),
+                Value<String?> numeroContrato = const Value.absent(),
+                Value<String?> puesto = const Value.absent(),
+                Value<String?> salario = const Value.absent(),
+                Value<String?> ubicacion = const Value.absent(),
+                Value<String?> ubicacionEspecifica = const Value.absent(),
+                Value<String?> fechaInicio = const Value.absent(),
+                Value<String?> fechaFin = const Value.absent(),
                 Value<int> fechaHoraFirma = const Value.absent(),
                 Value<String> estado = const Value.absent(),
                 Value<String?> tokenConfirmacion = const Value.absent(),
@@ -7830,6 +8322,13 @@ class $$CitasTableTableManager
                 personaDpi: personaDpi,
                 personaCorreo: personaCorreo,
                 personaTelefono: personaTelefono,
+                numeroContrato: numeroContrato,
+                puesto: puesto,
+                salario: salario,
+                ubicacion: ubicacion,
+                ubicacionEspecifica: ubicacionEspecifica,
+                fechaInicio: fechaInicio,
+                fechaFin: fechaFin,
                 fechaHoraFirma: fechaHoraFirma,
                 estado: estado,
                 tokenConfirmacion: tokenConfirmacion,
@@ -7857,6 +8356,13 @@ class $$CitasTableTableManager
                 Value<String?> personaDpi = const Value.absent(),
                 required String personaCorreo,
                 Value<String?> personaTelefono = const Value.absent(),
+                Value<String?> numeroContrato = const Value.absent(),
+                Value<String?> puesto = const Value.absent(),
+                Value<String?> salario = const Value.absent(),
+                Value<String?> ubicacion = const Value.absent(),
+                Value<String?> ubicacionEspecifica = const Value.absent(),
+                Value<String?> fechaInicio = const Value.absent(),
+                Value<String?> fechaFin = const Value.absent(),
                 required int fechaHoraFirma,
                 Value<String> estado = const Value.absent(),
                 Value<String?> tokenConfirmacion = const Value.absent(),
@@ -7882,6 +8388,13 @@ class $$CitasTableTableManager
                 personaDpi: personaDpi,
                 personaCorreo: personaCorreo,
                 personaTelefono: personaTelefono,
+                numeroContrato: numeroContrato,
+                puesto: puesto,
+                salario: salario,
+                ubicacion: ubicacion,
+                ubicacionEspecifica: ubicacionEspecifica,
+                fechaInicio: fechaInicio,
+                fechaFin: fechaFin,
                 fechaHoraFirma: fechaHoraFirma,
                 estado: estado,
                 tokenConfirmacion: tokenConfirmacion,
@@ -7940,15 +8453,17 @@ class $$CitasTableTableManager
                         >
                       >(state) {
                         if (creadaPor) {
-                          state = state.withJoin(
-                            currentTable: table,
-                            currentColumn: table.creadaPor,
-                            referencedTable: $$CitasTableReferences
-                                ._creadaPorTable(db),
-                            referencedColumn: $$CitasTableReferences
-                                ._creadaPorTable(db)
-                                .id,
-                          ) as T;
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.creadaPor,
+                                    referencedTable: $$CitasTableReferences
+                                        ._creadaPorTable(db),
+                                    referencedColumn: $$CitasTableReferences
+                                        ._creadaPorTable(db)
+                                        .id,
+                                  )
+                                  as T;
                         }
 
                         return state;
@@ -8042,32 +8557,34 @@ typedef $$CitasTableProcessedTableManager =
         bool eventosCitaRefs,
       })
     >;
-typedef $$DocumentosTableCreateCompanionBuilder = DocumentosCompanion Function({
-  Value<int> id,
-  required int citaId,
-  required String tipo,
-  required String nombre,
-  required String rutaArchivo,
-  Value<String?> hashSha256,
-  Value<String?> mimeType,
-  Value<int?> tamanoBytes,
-  required int subidoPor,
-  required int subidoAt,
-  Value<bool> isDelete,
-});
-typedef $$DocumentosTableUpdateCompanionBuilder = DocumentosCompanion Function({
-  Value<int> id,
-  Value<int> citaId,
-  Value<String> tipo,
-  Value<String> nombre,
-  Value<String> rutaArchivo,
-  Value<String?> hashSha256,
-  Value<String?> mimeType,
-  Value<int?> tamanoBytes,
-  Value<int> subidoPor,
-  Value<int> subidoAt,
-  Value<bool> isDelete,
-});
+typedef $$DocumentosTableCreateCompanionBuilder =
+    DocumentosCompanion Function({
+      Value<int> id,
+      required int citaId,
+      required String tipo,
+      required String nombre,
+      required String rutaArchivo,
+      Value<String?> hashSha256,
+      Value<String?> mimeType,
+      Value<int?> tamanoBytes,
+      required int subidoPor,
+      required int subidoAt,
+      Value<bool> isDelete,
+    });
+typedef $$DocumentosTableUpdateCompanionBuilder =
+    DocumentosCompanion Function({
+      Value<int> id,
+      Value<int> citaId,
+      Value<String> tipo,
+      Value<String> nombre,
+      Value<String> rutaArchivo,
+      Value<String?> hashSha256,
+      Value<String?> mimeType,
+      Value<int?> tamanoBytes,
+      Value<int> subidoPor,
+      Value<int> subidoAt,
+      Value<bool> isDelete,
+    });
 
 final class $$DocumentosTableReferences
     extends BaseReferences<_$AppDatabase, $DocumentosTable, Documento> {
@@ -8506,26 +9023,30 @@ class $$DocumentosTableTableManager
                     >
                   >(state) {
                     if (citaId) {
-                      state = state.withJoin(
-                        currentTable: table,
-                        currentColumn: table.citaId,
-                        referencedTable: $$DocumentosTableReferences
-                            ._citaIdTable(db),
-                        referencedColumn: $$DocumentosTableReferences
-                            ._citaIdTable(db)
-                            .id,
-                      ) as T;
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.citaId,
+                                referencedTable: $$DocumentosTableReferences
+                                    ._citaIdTable(db),
+                                referencedColumn: $$DocumentosTableReferences
+                                    ._citaIdTable(db)
+                                    .id,
+                              )
+                              as T;
                     }
                     if (subidoPor) {
-                      state = state.withJoin(
-                        currentTable: table,
-                        currentColumn: table.subidoPor,
-                        referencedTable: $$DocumentosTableReferences
-                            ._subidoPorTable(db),
-                        referencedColumn: $$DocumentosTableReferences
-                            ._subidoPorTable(db)
-                            .id,
-                      ) as T;
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.subidoPor,
+                                referencedTable: $$DocumentosTableReferences
+                                    ._subidoPorTable(db),
+                                referencedColumn: $$DocumentosTableReferences
+                                    ._subidoPorTable(db)
+                                    .id,
+                              )
+                              as T;
                     }
 
                     return state;
@@ -8553,38 +9074,40 @@ typedef $$DocumentosTableProcessedTableManager =
       Documento,
       PrefetchHooks Function({bool citaId, bool subidoPor})
     >;
-typedef $$CorreosLogTableCreateCompanionBuilder = CorreosLogCompanion Function({
-  Value<int> id,
-  Value<int?> citaId,
-  required String tipo,
-  required String destinatario,
-  Value<String?> cc,
-  required String asunto,
-  Value<String?> cuerpoHtml,
-  Value<String?> adjuntosJson,
-  Value<String> estado,
-  Value<int> intentos,
-  Value<int?> proximoIntentoAt,
-  Value<String?> errorMensaje,
-  required int programadoAt,
-  Value<int?> enviadoAt,
-});
-typedef $$CorreosLogTableUpdateCompanionBuilder = CorreosLogCompanion Function({
-  Value<int> id,
-  Value<int?> citaId,
-  Value<String> tipo,
-  Value<String> destinatario,
-  Value<String?> cc,
-  Value<String> asunto,
-  Value<String?> cuerpoHtml,
-  Value<String?> adjuntosJson,
-  Value<String> estado,
-  Value<int> intentos,
-  Value<int?> proximoIntentoAt,
-  Value<String?> errorMensaje,
-  Value<int> programadoAt,
-  Value<int?> enviadoAt,
-});
+typedef $$CorreosLogTableCreateCompanionBuilder =
+    CorreosLogCompanion Function({
+      Value<int> id,
+      Value<int?> citaId,
+      required String tipo,
+      required String destinatario,
+      Value<String?> cc,
+      required String asunto,
+      Value<String?> cuerpoHtml,
+      Value<String?> adjuntosJson,
+      Value<String> estado,
+      Value<int> intentos,
+      Value<int?> proximoIntentoAt,
+      Value<String?> errorMensaje,
+      required int programadoAt,
+      Value<int?> enviadoAt,
+    });
+typedef $$CorreosLogTableUpdateCompanionBuilder =
+    CorreosLogCompanion Function({
+      Value<int> id,
+      Value<int?> citaId,
+      Value<String> tipo,
+      Value<String> destinatario,
+      Value<String?> cc,
+      Value<String> asunto,
+      Value<String?> cuerpoHtml,
+      Value<String?> adjuntosJson,
+      Value<String> estado,
+      Value<int> intentos,
+      Value<int?> proximoIntentoAt,
+      Value<String?> errorMensaje,
+      Value<int> programadoAt,
+      Value<int?> enviadoAt,
+    });
 
 final class $$CorreosLogTableReferences
     extends BaseReferences<_$AppDatabase, $CorreosLogTable, CorreosLogData> {
@@ -9007,15 +9530,17 @@ class $$CorreosLogTableTableManager
                     >
                   >(state) {
                     if (citaId) {
-                      state = state.withJoin(
-                        currentTable: table,
-                        currentColumn: table.citaId,
-                        referencedTable: $$CorreosLogTableReferences
-                            ._citaIdTable(db),
-                        referencedColumn: $$CorreosLogTableReferences
-                            ._citaIdTable(db)
-                            .id,
-                      ) as T;
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.citaId,
+                                referencedTable: $$CorreosLogTableReferences
+                                    ._citaIdTable(db),
+                                referencedColumn: $$CorreosLogTableReferences
+                                    ._citaIdTable(db)
+                                    .id,
+                              )
+                              as T;
                     }
 
                     return state;
@@ -9412,26 +9937,30 @@ class $$EventosCitaTableTableManager
                     >
                   >(state) {
                     if (citaId) {
-                      state = state.withJoin(
-                        currentTable: table,
-                        currentColumn: table.citaId,
-                        referencedTable: $$EventosCitaTableReferences
-                            ._citaIdTable(db),
-                        referencedColumn: $$EventosCitaTableReferences
-                            ._citaIdTable(db)
-                            .id,
-                      ) as T;
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.citaId,
+                                referencedTable: $$EventosCitaTableReferences
+                                    ._citaIdTable(db),
+                                referencedColumn: $$EventosCitaTableReferences
+                                    ._citaIdTable(db)
+                                    .id,
+                              )
+                              as T;
                     }
                     if (createdBy) {
-                      state = state.withJoin(
-                        currentTable: table,
-                        currentColumn: table.createdBy,
-                        referencedTable: $$EventosCitaTableReferences
-                            ._createdByTable(db),
-                        referencedColumn: $$EventosCitaTableReferences
-                            ._createdByTable(db)
-                            .id,
-                      ) as T;
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.createdBy,
+                                referencedTable: $$EventosCitaTableReferences
+                                    ._createdByTable(db),
+                                referencedColumn: $$EventosCitaTableReferences
+                                    ._createdByTable(db)
+                                    .id,
+                              )
+                              as T;
                     }
 
                     return state;
@@ -9459,28 +9988,30 @@ typedef $$EventosCitaTableProcessedTableManager =
       EventosCitaData,
       PrefetchHooks Function({bool citaId, bool createdBy})
     >;
-typedef $$AuditoriaTableCreateCompanionBuilder = AuditoriaCompanion Function({
-  Value<int> id,
-  Value<int?> userId,
-  required String tabla,
-  Value<int?> registroId,
-  required String accion,
-  Value<String?> valorAntes,
-  Value<String?> valorDespues,
-  Value<String?> motivo,
-  required int fecha,
-});
-typedef $$AuditoriaTableUpdateCompanionBuilder = AuditoriaCompanion Function({
-  Value<int> id,
-  Value<int?> userId,
-  Value<String> tabla,
-  Value<int?> registroId,
-  Value<String> accion,
-  Value<String?> valorAntes,
-  Value<String?> valorDespues,
-  Value<String?> motivo,
-  Value<int> fecha,
-});
+typedef $$AuditoriaTableCreateCompanionBuilder =
+    AuditoriaCompanion Function({
+      Value<int> id,
+      Value<int?> userId,
+      required String tabla,
+      Value<int?> registroId,
+      required String accion,
+      Value<String?> valorAntes,
+      Value<String?> valorDespues,
+      Value<String?> motivo,
+      required int fecha,
+    });
+typedef $$AuditoriaTableUpdateCompanionBuilder =
+    AuditoriaCompanion Function({
+      Value<int> id,
+      Value<int?> userId,
+      Value<String> tabla,
+      Value<int?> registroId,
+      Value<String> accion,
+      Value<String?> valorAntes,
+      Value<String?> valorDespues,
+      Value<String?> motivo,
+      Value<int> fecha,
+    });
 
 final class $$AuditoriaTableReferences
     extends BaseReferences<_$AppDatabase, $AuditoriaTable, AuditoriaData> {
@@ -9812,15 +10343,17 @@ class $$AuditoriaTableTableManager
                     >
                   >(state) {
                     if (userId) {
-                      state = state.withJoin(
-                        currentTable: table,
-                        currentColumn: table.userId,
-                        referencedTable: $$AuditoriaTableReferences
-                            ._userIdTable(db),
-                        referencedColumn: $$AuditoriaTableReferences
-                            ._userIdTable(db)
-                            .id,
-                      ) as T;
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$AuditoriaTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$AuditoriaTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
                     }
 
                     return state;

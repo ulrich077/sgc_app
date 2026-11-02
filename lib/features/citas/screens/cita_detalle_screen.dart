@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -36,14 +37,14 @@ class CitaDetalleScreen extends ConsumerWidget {
           child: Scaffold(
             appBar: AppBar(
               title: Text(cita.personaNombre),
-              bottom: TabBar(
+              bottom: const TabBar(
                 labelColor: AppColors.primary,
                 indicatorColor: AppColors.primary,
                 unselectedLabelColor: AppColors.textSecondary,
-                tabs: const [
+                tabs: [
                   Tab(icon: Icon(Icons.info_outline), text: 'Datos'),
-                  Tab(icon: Icon(Icons.playlist_add_check), text: 'Acciones'), // <-- Movido
-                  Tab(icon: Icon(Icons.folder_outlined), text: 'Documentos'), // <-- Movido
+                  Tab(icon: Icon(Icons.playlist_add_check), text: 'Acciones'),
+                  Tab(icon: Icon(Icons.folder_outlined), text: 'Documentos'),
                   Tab(icon: Icon(Icons.history), text: 'Historial'),
                 ],
               ),
@@ -51,8 +52,8 @@ class CitaDetalleScreen extends ConsumerWidget {
             body: TabBarView(
               children: [
                 DatosTab(cita: cita, estado: estado),
-                AccionesTab(cita: cita), // <-- Movido
-                DocumentosTab(citaId: cita.id), // <-- Movido
+                AccionesTab(cita: cita),
+                DocumentosTab(citaId: cita.id),
                 _HistorialTab(citaId: cita.id),
               ],
             ),
@@ -96,9 +97,69 @@ class _HistorialTab extends ConsumerWidget {
           itemCount: eventos.length,
           itemBuilder: (context, i) {
             final e = eventos[i];
-            // REGLA VI: Multiplicamos por 1000 para Flutter
             final fecha = DateTime.fromMillisecondsSinceEpoch(e.createdAt * 1000);
             
+            String titulo = 'Evento';
+            String subtitulo = '';
+            IconData icono = Icons.check;
+            Color colorIcono = AppColors.primary;
+            Map<String, dynamic>? detalleMap;
+
+            if (e.detalleJson != null && e.detalleJson!.isNotEmpty) {
+              try {
+                detalleMap = jsonDecode(e.detalleJson!) as Map<String, dynamic>;
+              } catch (_) {}
+            }
+
+            switch (e.tipoEvento) {
+              case 'cambio_estado':
+                titulo = 'Cambio de Estado';
+                if (detalleMap != null) {
+                  subtitulo = "De ${detalleMap['anterior']} a ${detalleMap['nuevo']}";
+                }
+                break;
+              case 'post_mortem_subido':
+                titulo = 'Post Mortem Subido';
+                subtitulo = 'El documento físico fue agregado.';
+                break;
+              case 'post_mortem_eliminado':
+                titulo = 'Post Mortem Eliminado';
+                subtitulo = 'El documento físico fue eliminado.';
+                break;
+              case 'contraloria_subida':
+                titulo = 'Contraloría Subida';
+                subtitulo = 'El documento físico fue agregado.';
+                break;
+              case 'contraloria_eliminada':
+                titulo = 'Contraloría Eliminada';
+                subtitulo = 'El documento físico fue eliminado.';
+                break;
+              case 'responsabilidad_subida':
+                titulo = 'Documento de Responsabilidad Subido';
+                subtitulo = 'El documento firmado fue agregado.';
+                break;
+              case 'responsabilidad_eliminada':
+                titulo = 'Documento de Responsabilidad Eliminado';
+                subtitulo = 'El documento firmado fue eliminado.';
+                break;
+              case 'contrato_subido':
+                titulo = 'Contrato Firmado Subido';
+                subtitulo = 'El contrato firmado fue agregado.';
+                break;
+              case 'contrato_eliminado':
+                titulo = 'Contrato Firmado Eliminado';
+                subtitulo = 'El contrato firmado fue eliminado.';
+                break;
+              case 'error_envio_correo':
+                titulo = 'Error de Envío de Correo';
+                subtitulo = 'No se pudo enviar el correo. Revisar detalles.';
+                icono = Icons.error;
+                colorIcono = Colors.red;
+                break;
+              default:
+                titulo = e.tipoEvento.replaceAll('_', ' ').toUpperCase();
+            }
+
             return Card(
               elevation: 0,
               margin: const EdgeInsets.only(bottom: 12),
@@ -108,26 +169,43 @@ class _HistorialTab extends ConsumerWidget {
               ),
               child: InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  // Mostrar los detalles si existen
-                  if (e.detalleJson != null && e.detalleJson!.isNotEmpty) {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: Text(e.tipoEvento.replaceAll('_', ' ').toUpperCase()),
-                        content: SingleChildScrollView(
-                          child: Text(
-                            e.detalleJson!,
-                            style: const TextStyle(fontFamily: 'Courier', fontSize: 13),
-                          ),
+                onTap: detalleMap != null ? () {
+                  showDialog(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(titulo),
+                      content: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: detalleMap!.entries.map((entry) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${entry.key.toUpperCase()}: ',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      entry.value.toString(),
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
                         ),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
-                        ],
                       ),
-                    );
-                  }
-                },
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+                      ],
+                    ),
+                  );
+                } : null,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Row(
@@ -136,10 +214,10 @@ class _HistorialTab extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
+                          color: colorIcono.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.check, color: AppColors.primary, size: 16),
+                        child: Icon(icono, color: colorIcono, size: 16),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -147,22 +225,22 @@ class _HistorialTab extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              e.tipoEvento.replaceAll('_', ' ').toUpperCase(),
+                              titulo,
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                             ),
-                            const SizedBox(height: 4),
+                            if (subtitulo.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(subtitulo, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                            ],
+                            const SizedBox(height: 6),
                             Text(
                               dateFmt.format(fecha),
-                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                              style: const TextStyle(color: Colors.grey, fontSize: 11),
                             ),
-                            if (e.detalleJson != null && e.detalleJson!.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              const Text('Toca para ver detalles', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
-                            ],
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+                      if (detalleMap != null) const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
                     ],
                   ),
                 ),

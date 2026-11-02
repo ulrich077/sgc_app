@@ -46,6 +46,13 @@ class Citas extends Table {
   TextColumn get personaDpi => text().nullable()();
   TextColumn get personaCorreo => text()();
   TextColumn get personaTelefono => text().nullable()();
+  TextColumn get numeroContrato => text().nullable()();
+  TextColumn get puesto => text().nullable()();
+  TextColumn get salario => text().nullable()();
+  TextColumn get ubicacion => text().nullable()();
+  TextColumn get ubicacionEspecifica => text().nullable()();
+  TextColumn get fechaInicio => text().nullable()();
+  TextColumn get fechaFin => text().nullable()();
   IntColumn get fechaHoraFirma => integer()();
   TextColumn get estado =>
       text().withDefault(const Constant('CITA_CREADA'))();

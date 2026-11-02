@@ -16,6 +16,7 @@ import '../../documentos/data/documentos_repository.dart';
 import '../../documentos/domain/documento_tipo.dart';
 import '../data/citas_repository.dart';
 import '../domain/cita_estado.dart';
+import 'cancelar_reagendar_dialog.dart';
 
 class AccionesTab extends ConsumerStatefulWidget {
   final Cita cita;
@@ -293,22 +294,79 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                       isLocked: !procesoCompleto,
                       child: !procesoCompleto
                         ? _buildLockedMessage()
-                        : Align(
-                            alignment: Alignment.centerLeft,
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: _finalEnviado ? Colors.green : AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        : Wrap(
+                            spacing: AppSizes.md,
+                            runSpacing: AppSizes.md,
+                            children: [
+                              FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: _finalEnviado ? Colors.grey.shade400 : AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                ),
+                                icon: _enviandoFinal
+                                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : FaIcon(_finalEnviado ? FontAwesomeIcons.circleCheck : FontAwesomeIcons.paperPlane, size: 18),
+                                label: Text(_enviandoFinal ? 'Enviando...' : _finalEnviado ? '¡Enviado!' : 'Enviar Correo Final'),
+                                onPressed: (_enviandoFinal || _finalEnviado) ? null : _enviarCorreoFinal,
                               ),
-                              icon: _enviandoFinal
-                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : FaIcon(_finalEnviado ? FontAwesomeIcons.circleCheck : FontAwesomeIcons.paperPlane, size: 18),
-                              label: Text(_enviandoFinal ? 'Enviando...' : _finalEnviado ? '¡Enviado!' : 'Enviar Correo Final'),
-                              onPressed: (_enviandoFinal || _finalEnviado) ? null : _enviarCorreoFinal,
-                            ),
+                              // BOTÓN DE REENVIAR (Solo si ya se envió)
+                              if (_finalEnviado)
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                                    side: const BorderSide(color: AppColors.primary),
+                                  ),
+                                  icon: const FaIcon(FontAwesomeIcons.rotateRight, size: 16, color: AppColors.primary),
+                                  label: const Text('Reenviar Correo', style: TextStyle(color: AppColors.primary)),
+                                  onPressed: () async {
+                                    // Aquí iría la lógica para reencolar el correo final
+                                    // Por ahora, llamamos a _enviarCorreoFinal de nuevo, pero limpiando el estado
+                                    setState(() {
+                                      _finalEnviado = false;
+                                      _enviandoFinal = true;
+                                    });
+                                    await _enviarCorreoFinal();
+                                  },
+                                ),
+                            ],
                           ),
                     ),
+
+                    const SizedBox(height: 16),
+
+                    // PASO 5: CERRAR PROCESO
+                    if (estado == CitaEstado.contratoEnviado) ...[
+                      _PremiumCard(
+                        stepNumber: 5,
+                        title: 'Paso 5: Cerrar Proceso',
+                        subtitle: 'Finalizar la cita y archivarla.',
+                        icon: FontAwesomeIcons.flagCheckered,
+                        isLocked: false,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                            ),
+                            icon: const FaIcon(FontAwesomeIcons.checkDouble, size: 18),
+                            label: const Text('Cerrar Cita'),
+                            onPressed: () async {
+                              final auth = ref.read(authProvider);
+                              await CitasRepository(ref.read(databaseProvider)).cambiarEstado(
+                                citaId: cita.id,
+                                nuevoEstado: CitaEstado.cerrada,
+                                userId: auth.userId ?? 1,
+                              );
+                              if (context.mounted) AppDialogs.success(context, 'Cita cerrada exitosamente.');
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     const SizedBox(height: 32),
                     
@@ -324,7 +382,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           onPressed: () async {
-                            AppDialogs.info(context, 'Módulo de cancelación en construcción.');
+                            await CancelarReagendarDialog.show(context, cita);
                           },
                         ),
                       ),
