@@ -222,7 +222,7 @@ class SgcServer {
     });
 
     // POST /api/citas/<id>/pdf — genera Documento de Responsabilidad
-    router.post('/api/citas/<id>/pdf', (Request req, String idStr) async {
+    router.get('/api/citas/<id>/pdf', (Request req, String idStr) async {
       try {
         final id = int.parse(idStr);
         final cita = await (db.select(db.citas)
@@ -250,6 +250,32 @@ class SgcServer {
     });
 
     // POST /api/correos/encolar
+    // POST /api/citas/<id>/pdf — genera Documento de Responsabilidad
+    router.get('/api/citas/<id>/pdf', (Request req, String idStr) async {
+      try {
+        final id = int.parse(idStr);
+        final cita = await (db.select(db.citas)
+              ..where((t) => t.id.equals(id)))
+            .getSingleOrNull();
+        if (cita == null) return Response.notFound('Cita no encontrada');
+
+        final result = await PdfService.generarDocumentoResponsabilidad(cita);
+
+        return Response.ok(
+          result.bytes,
+          headers: {
+            'content-type': 'application/pdf',
+            'content-disposition':
+                'attachment; filename="${result.nombreArchivo}"',
+          },
+        );
+      } catch (e) {
+        return Response(500,
+            body: jsonEncode({'error': e.toString()}),
+            headers: {'content-type': 'application/json'});
+      }
+    });
+
     router.post('/api/correos/encolar', (Request req) async {
       try {
         final body =
