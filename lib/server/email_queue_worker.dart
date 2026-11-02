@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:drift/drift.dart';
 import '../data/database/app_database.dart';
+import '../features/citas/data/eventos_repository.dart';
 import 'email_service.dart';
 
 class EmailQueueWorker {
@@ -81,6 +82,14 @@ class EmailQueueWorker {
         enviadoAt: Value(DateTime.now().millisecondsSinceEpoch),
       ));
     } catch (e) {
+      // Registrar el error en el historial
+      if (c.citaId != null) {
+        await EventosRepository(db).registrar(
+          citaId: c.citaId!,
+          tipoEvento: 'error_envio_correo',
+          detalle: {'error': e.toString(), 'intentos': c.intentos + 1},
+        );
+      }
       await _marcarFallido(c, e.toString(), c.intentos + 1);
     }
   }

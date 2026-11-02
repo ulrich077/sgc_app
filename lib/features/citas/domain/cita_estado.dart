@@ -31,13 +31,13 @@ enum CitaEstado {
       case CitaEstado.enEsperaFirma:
         return 'En espera de firma';
       case CitaEstado.firmado:
-        return 'Firmado';
+        return 'Paso 1: Docs. Físicos';
       case CitaEstado.documentoSubido:
-        return 'Documento subido';
+        return 'Paso 2: Responsabilidad';
       case CitaEstado.pendienteEnvioContrato:
-        return 'Pendiente envío de contrato';
+        return 'Paso 3: Contrato Firmado';
       case CitaEstado.contratoEnviado:
-        return 'Contrato enviado';
+        return 'Paso 4: Correo Enviado';
       case CitaEstado.cerrada:
         return 'Cerrada';
       case CitaEstado.noSePresento:
