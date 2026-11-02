@@ -21,6 +21,39 @@ class CitasRepository {
     return (_db.select(_db.citas)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
+  // VALIDACIÓN DE DISPONIBILIDAD
+  Future<bool> hayDisponibilidad(DateTime fechaHora) async {
+    final cfgRows = await _db.select(_db.configuracion).get();
+    final cfg = {for (final r in cfgRows) r.clave: r.valor};
+    
+    final maxCitas = int.tryParse(cfg['max_citas_por_hora'] ?? '2') ?? 2;
+    final intervalo = int.tryParse(cfg['intervalo_minutos'] ?? '30') ?? 30;
+
+    if (fechaHora.minute % intervalo != 0) {
+      throw Exception('La hora debe ser en bloques de $intervalo minutos.');
+    }
+
+    final inicioHora = DateTime(fechaHora.year, fechaHora.month, fechaHora.day, fechaHora.hour, 0, 0);
+    final finHora = inicioHora.add(const Duration(hours: 1));
+    
+    final inicioSegundos = inicioHora.millisecondsSinceEpoch ~/ 1000;
+    final finSegundos = finHora.millisecondsSinceEpoch ~/ 1000;
+
+    final citasEnHora = await (_db.select(_db.citas)
+          ..where((t) => 
+              t.fechaHoraFirma.isBiggerOrEqualValue(inicioSegundos) &
+              t.fechaHoraFirma.isSmallerThanValue(finSegundos) &
+              t.isDelete.equals(false) &
+              t.estado.equals('CANCELADA').not()))
+        .get();
+
+    if (citasEnHora.length >= maxCitas) {
+      throw Exception('Ya hay $maxCitas citas agendadas para esta hora. Por favor elija otra.');
+    }
+
+    return true;
+  }
+
   Future<int> crear({
     required String personaNombre,
     required String personaCorreo,
@@ -298,6 +331,25 @@ class CitasRepository {
           ..where((t) => t.isDelete.equals(false))
           ..orderBy([(t) => OrderingTerm.desc(t.dateCreation)])
           ..limit(limit))
+        .watch();
+  }
+
+  // NUEVOS MÉTODOS PARA EL CALENDARIO
+  Future<List<Cita>> obtenerCitasPorFecha(DateTime inicio, DateTime fin) async {
+    final inicioSegundos = inicio.millisecondsSinceEpoch ~/ 1000;
+    final finSegundos = fin.millisecondsSinceEpoch ~/ 1000;
+
+    return await (_db.select(_db.citas)
+          ..where((t) => 
+              t.fechaHoraFirma.isBiggerOrEqualValue(inicioSegundos) &
+              t.fechaHoraFirma.isSmallerThanValue(finSegundos) &
+              t.isDelete.equals(false)))
+        .get();
+  }
+
+  Stream<List<Cita>> watchTodas() {
+    return (_db.select(_db.citas)
+          ..where((t) => t.isDelete.equals(false)))
         .watch();
   }
 

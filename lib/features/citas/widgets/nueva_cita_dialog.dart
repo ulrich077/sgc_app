@@ -83,7 +83,13 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
     setState(() => _saving = true);
     try {
       final dt = DateTime(_fecha.year, _fecha.month, _fecha.day, _hora.hour, _hora.minute);
-      await ref.read(citasRepositoryProvider).crear(
+      
+      final repo = ref.read(citasRepositoryProvider);
+      
+      // VALIDACIÓN DE DISPONIBILIDAD
+      await repo.hayDisponibilidad(dt);
+
+      await repo.crear(
             personaNombre: _nombre.text.trim(),
             personaCorreo: _correo.text.trim(),
             fechaHoraFirma: dt,

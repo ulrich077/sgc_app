@@ -427,3 +427,87 @@ class _PlantillaEditorState extends ConsumerState<_PlantillaEditor> {
     );
   }
 }
+
+class _ConfigField extends ConsumerStatefulWidget {
+  final String clave;
+  final String label;
+  final String hint;
+
+  const _ConfigField({
+    required this.clave,
+    required this.label,
+    required this.hint,
+  });
+
+  @override
+  ConsumerState<_ConfigField> createState() => _ConfigFieldState();
+}
+
+class _ConfigFieldState extends ConsumerState<_ConfigField> {
+  final _ctrl = TextEditingController();
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final db = ref.read(databaseProvider);
+    final row = await (db.select(db.configuracion)
+          ..where((t) => t.clave.equals(widget.clave)))
+        .getSingleOrNull();
+    if (mounted) {
+      setState(() {
+        _ctrl.text = row?.valor ?? '';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final db = ref.read(databaseProvider);
+      await (db.update(db.configuracion)..where((t) => t.clave.equals(widget.clave)))
+          .write(ConfiguracionCompanion(valor: Value(_ctrl.text.trim())));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${widget.label} guardado'), backgroundColor: Colors.green),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const LinearProgressIndicator();
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _ctrl,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: widget.label,
+              hintText: widget.hint,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSizes.md),
+        FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.save, size: 16),
+          label: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
