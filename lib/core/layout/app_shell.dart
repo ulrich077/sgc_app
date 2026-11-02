@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_provider.dart';
 import '../auth/auth_state.dart';
-import '../constants/app_colors.dart';
 import '../constants/app_sizes.dart';
-import '../widgets/responsive.dart';
+import '../providers/theme_colors_provider.dart';
 
 class AppShell extends ConsumerWidget {
   final Widget child;
@@ -14,47 +13,141 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
-    final isMobile = Responsive.isMobile(context);
-
+    final colors = ref.watch(themeColorsProvider).maybeWhen(
+          data: (c) => c,
+          orElse: () => ThemeColors.defaults,
+        );
     final items = _menuItems(auth);
     final currentPath = GoRouterState.of(context).matchedLocation;
-
-    if (isMobile) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('SGC'),
-          actions: [
-            Builder(
-              builder: (ctx) => IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: () => Scaffold.of(ctx).openDrawer(),
-              ),
-            ),
-          ],
-        ),
-        drawer: Drawer(
-          child: _SidebarContent(
-            items: items,
-            currentPath: currentPath,
-            auth: auth,
-          ),
-        ),
-        body: child,
-      );
-    }
 
     return Scaffold(
       body: Row(
         children: [
-          SizedBox(
-            width: 240,
-            child: _SidebarContent(
-              items: items,
-              currentPath: currentPath,
-              auth: auth,
+          // MENÚ LATERAL PREMIUM
+          Container(
+            width: 250,
+            color: colors.primary, // Fondo con el color primario
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.fromLTRB(
+                      AppSizes.lg, AppSizes.xl, AppSizes.lg, AppSizes.lg),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.1), // Un tono más oscuro
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.1),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.admin_panel_settings_rounded,
+                              color: Colors.white.withValues(alpha: 0.9),
+                              size: 28),
+                          const SizedBox(width: AppSizes.sm),
+                          const Text(
+                            'SGC',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSizes.md),
+                      Text(
+                        auth.nombreCompleto ?? '',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        auth.rolNombre ?? '',
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                // Lista de opciones
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppSizes.sm, vertical: AppSizes.md),
+                    children: items.map((item) {
+                      final selected = currentPath == item.path;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppSizes.xs),
+                        // Envolvemos en Material para que las ondas de clic funcionen
+                        child: Material(
+                          color: selected
+                              ? Colors.white.withValues(alpha: 0.15)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(AppSizes.md),
+                          child: ListTile(
+                            leading: Icon(
+                              item.icon,
+                              color: selected
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.6),
+                            ),
+                            title: Text(
+                              item.label,
+                              style: TextStyle(
+                                fontWeight: selected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: selected
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.8),
+                              ),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppSizes.md),
+                            ),
+                            onTap: () => context.go(item.path),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                // Botón de cerrar sesión
+                Padding(
+                  padding: const EdgeInsets.all(AppSizes.sm),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: ListTile(
+                      leading: const Icon(Icons.logout, color: Colors.white),
+                      title: const Text('Cerrar sesión',
+                          style: TextStyle(color: Colors.white)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppSizes.md),
+                      ),
+                      onTap: () => ref.read(authProvider.notifier).logout(),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const VerticalDivider(width: 1),
+          // Divisor
+          VerticalDivider(
+            width: 1,
+            color: Colors.black.withValues(alpha: 0.1),
+          ),
+          // Contenido
           Expanded(child: child),
         ],
       ),
@@ -89,94 +182,4 @@ class _MenuItem {
   final String label;
   final IconData icon;
   const _MenuItem(this.path, this.label, this.icon);
-}
-
-class _SidebarContent extends ConsumerWidget {
-  final List<_MenuItem> items;
-  final String currentPath;
-  final AuthState auth;
-
-  const _SidebarContent({
-    required this.items,
-    required this.currentPath,
-    required this.auth,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      color: AppColors.surface,
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSizes.lg),
-            color: AppColors.primary,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('SGC',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(height: AppSizes.xs),
-                Text(
-                  auth.nombreCompleto ?? '',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  auth.rolNombre ?? '',
-                  style: const TextStyle(color: Colors.white54, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              children: items.map((item) {
-                final selected = currentPath == item.path ||
-                    currentPath.startsWith('${item.path}/');
-                return ListTile(
-                  leading: Icon(item.icon,
-                      color: selected
-                          ? AppColors.primary
-                          : AppColors.textSecondary),
-                  title: Text(
-                    item.label,
-                    style: TextStyle(
-                      fontWeight:
-                          selected ? FontWeight.w600 : FontWeight.normal,
-                      color: selected
-                          ? AppColors.primary
-                          : AppColors.textPrimary,
-                    ),
-                  ),
-                  selected: selected,
-                  selectedTileColor:
-                      AppColors.primary.withValues(alpha: 0.08),
-                  onTap: () {
-                    if (Responsive.isMobile(context)) {
-                      Navigator.of(context).pop();
-                    }
-                    if (currentPath != item.path) {
-                      context.go(item.path);
-                    }
-                  },
-                );
-              }).toList(),
-            ),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.logout, color: AppColors.danger),
-            title: const Text('Cerrar sesión',
-                style: TextStyle(color: AppColors.danger)),
-            onTap: () => ref.read(authProvider.notifier).logout(),
-          ),
-        ],
-      ),
-    );
-  }
 }

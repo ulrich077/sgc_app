@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
 import '../../../core/providers/database_provider.dart';
-import '../../../core/widgets/app_page_header.dart';
 import '../../../data/database/app_database.dart';
-import '../domain/cita_estado.dart';
 import '../data/eventos_repository.dart';
+import '../domain/cita_estado.dart';
 import '../widgets/acciones_tab.dart';
 import '../widgets/documentos_tab.dart';
 
@@ -24,7 +24,6 @@ class CitaDetalleScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final citaAsync = ref.watch(citaPorIdProvider(citaId));
-    final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
     return citaAsync.when(
       loading: () => const Scaffold(
@@ -47,8 +46,32 @@ class CitaDetalleScreen extends ConsumerWidget {
           length: 4,
           child: Scaffold(
             appBar: AppBar(
-              title: Text(cita.personaNombre),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                onPressed: () => context.pop(),
+              ),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(cita.personaNombre),
+                  Text(
+                    estado.label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: estado.color,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.white,
+              elevation: 0,
+              foregroundColor: AppColors.textPrimary,
               bottom: const TabBar(
+                labelColor: AppColors.primary,
+                unselectedLabelColor: AppColors.textSecondary,
+                indicatorColor: AppColors.primary,
+                indicatorWeight: 3,
                 tabs: [
                   Tab(icon: Icon(Icons.info_outline), text: 'Datos'),
                   Tab(icon: Icon(Icons.folder_outlined), text: 'Documentos'),
@@ -57,13 +80,16 @@ class CitaDetalleScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            body: TabBarView(
-              children: [
-                _DatosTab(cita: cita, estado: estado, dateFmt: dateFmt),
-                DocumentosTab(citaId: cita.id),
-                AccionesTab(cita: cita),
-                _HistorialTab(citaId: cita.id),
-              ],
+            body: Container(
+              color: AppColors.background,
+              child: TabBarView(
+                children: [
+                  _DatosTab(cita: cita, estado: estado),
+                  DocumentosTab(citaId: cita.id),
+                  AccionesTab(cita: cita),
+                  _HistorialTab(citaId: cita.id),
+                ],
+              ),
             ),
           ),
         );
@@ -75,79 +101,192 @@ class CitaDetalleScreen extends ConsumerWidget {
 class _DatosTab extends StatelessWidget {
   final Cita cita;
   final CitaEstado estado;
-  final DateFormat dateFmt;
 
   const _DatosTab({
     required this.cita,
     required this.estado,
-    required this.dateFmt,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        AppPageHeader(
-          title: cita.personaNombre,
-          subtitle: 'Estado: ${estado.label}',
-        ),
-        Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSizes.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSizes.pagePadding),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSizes.xl),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(AppSizes.lg),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      child: Text(
+                        cita.personaNombre.substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSizes.lg),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            cita.personaNombre,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: estado.color.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              estado.label,
+                              style: TextStyle(
+                                color: estado.color,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSizes.lg),
+              _InfoCard(
+                title: 'Información Personal',
+                icon: Icons.person_outline,
                 children: [
-                  _field('Nombre', cita.personaNombre),
                   _field('DPI', cita.personaDpi ?? '—'),
-                  _field('Correo', cita.personaCorreo),
+                  _field('Correo Electrónico', cita.personaCorreo),
                   _field('Teléfono', cita.personaTelefono ?? '—'),
+                ],
+              ),
+              const SizedBox(height: AppSizes.lg),
+              _InfoCard(
+                title: 'Detalles de la Cita',
+                icon: Icons.event_note,
+                children: [
                   _field(
-                    'Fecha de firma',
-                    dateFmt.format(DateTime.fromMillisecondsSinceEpoch(
-                        cita.fechaHoraFirma)),
+                    'Fecha programada',
+                    dateFmt.format(DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma)),
                   ),
-                  _field(
-                    'Post Mortem presentado',
-                    cita.postMortemPresentado ? 'Sí' : 'No',
-                  ),
-                  _field(
-                    'Contraloría presentada',
-                    cita.contraloriaPresentada ? 'Sí' : 'No',
-                  ),
-                  if (cita.notas != null && cita.notas!.isNotEmpty)
-                    _field('Notas', cita.notas!),
+                  _field('Post Mortem', cita.postMortemPresentado ? 'Sí' : 'No'),
+                  _field('Contraloría', cita.contraloriaPresentada ? 'Sí' : 'No'),
                   if (cita.reagendadaVeces > 0)
                     _field('Reagendada', '${cita.reagendadaVeces} veces'),
                   if (cita.motivoUltimaReagenda != null)
-                    _field('Motivo última reagenda',
-                        cita.motivoUltimaReagenda!),
+                    _field('Motivo reagenda', cita.motivoUltimaReagenda!),
                 ],
               ),
-            ),
+              if (cita.notas != null && cita.notas!.isNotEmpty) ...[
+                const SizedBox(height: AppSizes.lg),
+                _InfoCard(
+                  title: 'Notas Adicionales',
+                  icon: Icons.sticky_note_2_outlined,
+                  children: [
+                    Text(cita.notas!, style: const TextStyle(fontSize: 14)),
+                  ],
+                ),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: AppSizes.xl),
-      ],
+      ),
     );
   }
 
   Widget _field(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSizes.sm),
+      padding: const EdgeInsets.only(bottom: AppSizes.md),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 180,
-            child: Text(label,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
-          Expanded(child: Text(value)),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+
+  const _InfoCard({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.xl),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppSizes.lg),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: AppColors.primary, size: 20),
+              const SizedBox(width: AppSizes.sm),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: AppSizes.xl),
+          ...children,
         ],
       ),
     );
@@ -162,6 +301,7 @@ class _HistorialTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(eventosRepositoryProvider);
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
+    
     return StreamBuilder<List<EventosCitaData>>(
       stream: repo.watchPorCita(citaId),
       builder: (context, snap) {
@@ -169,30 +309,98 @@ class _HistorialTab extends ConsumerWidget {
           return const Center(child: CircularProgressIndicator());
         }
         final eventos = snap.data!;
+        
         if (eventos.isEmpty) {
-          return const Center(child: Text('Sin eventos registrados.'));
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.history, size: 80, color: AppColors.primary.withValues(alpha: 0.2)),
+                const SizedBox(height: AppSizes.lg),
+                Text(
+                  'Sin historial registrado',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppSizes.sm),
+                const Text(
+                  'Los cambios de estado y acciones de esta cita\naparecerán aquí automáticamente.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textSecondary, height: 1.5),
+                ),
+              ],
+            ),
+          );
         }
-        return ListView(
+        
+        return SingleChildScrollView(
           padding: const EdgeInsets.all(AppSizes.pagePadding),
-          children: eventos.map((e) {
-            return Card(
-              child: ListTile(
-                leading: const Icon(Icons.history, color: AppColors.primary),
-                title: Text(e.tipoEvento),
-                subtitle: Text(
-                  e.detalleJson ?? '',
-                  style: const TextStyle(fontSize: 11),
-                ),
-                trailing: Text(
-                  dateFmt.format(DateTime.fromMillisecondsSinceEpoch(
-                      e.createdAt)),
-                  style: const TextStyle(fontSize: 11),
-                ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: Column(
+                children: eventos.map((e) => _TimelineCard(evento: e, dateFmt: dateFmt)).toList(),
               ),
-            );
-          }).toList(),
+            ),
+          ),
         );
       },
+    );
+  }
+}
+
+class _TimelineCard extends StatelessWidget {
+  final EventosCitaData evento;
+  final DateFormat dateFmt;
+
+  const _TimelineCard({required this.evento, required this.dateFmt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSizes.md),
+      padding: const EdgeInsets.all(AppSizes.lg),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppSizes.md),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSizes.sm),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: AppSizes.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  evento.tipoEvento.replaceAll('_', ' ').toUpperCase(),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  evento.detalleJson ?? 'Sin detalles adicionales.',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            dateFmt.format(DateTime.fromMillisecondsSinceEpoch(evento.createdAt)),
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
     );
   }
 }

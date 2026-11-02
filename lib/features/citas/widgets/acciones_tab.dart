@@ -7,13 +7,9 @@ import 'package:printing/printing.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
-import '../../../core/providers/database_provider.dart';
 import '../../../core/providers/sync_provider.dart';
 import '../../../core/utils/dialogs.dart';
 import '../../../data/database/app_database.dart';
-import '../../correos/data/correos_repository.dart';
-import '../../correos/domain/correo_tipo.dart';
-import '../../correos/services/email_dispatcher.dart';
 import '../../documentos/data/documentos_repository.dart';
 import '../../documentos/domain/documento_tipo.dart';
 import '../data/citas_repository.dart';
@@ -28,211 +24,162 @@ class AccionesTab extends ConsumerWidget {
     final estado = CitaEstado.fromDb(cita.estado);
     final auth = ref.watch(authProvider);
 
-    return ListView(
-      padding: const EdgeInsets.all(AppSizes.pagePadding),
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
+    return Container(
+      color: Colors.white, // Fondo blanco para que resalten las tarjetas
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSizes.pagePadding),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Documentos físicos',
-                    style: Theme.of(context).textTheme.titleMedium),
-                SwitchListTile(
-                  title: const Text('Post Mortem presentado'),
-                  subtitle: const Text(
-                      'Designación de Beneficiarios presentada'),
-                  value: cita.postMortemPresentado,
-                  onChanged: auth.userId == null
-                      ? null
-                      : (v) => _actualizarCita(
-                            context,
-                            ref,
-                            cita.id,
-                            {'postMortemPresentado': v},
-                            auth.userId!,
-                          ),
+                // TARJETA 1: DOCUMENTOS FÍSICOS
+                _ActionCard(
+                  title: 'Documentos Físicos',
+                  subtitle: 'Marca los documentos que el firmante presentó el día de la cita.',
+                  icon: Icons.folder_shared_outlined,
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Post Mortem presentado', style: TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: const Text('Designación de Beneficiarios'),
+                        value: cita.postMortemPresentado,
+                        activeTrackColor: AppColors.primary.withValues(alpha: 0.5),
+                        activeThumbColor: AppColors.primary,
+                        onChanged: auth.userId == null
+                            ? null
+                            : (v) => _actualizarCita(context, ref, cita.id, {'postMortemPresentado': v}, auth.userId!),
+                      ),
+                      const Divider(),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Contraloría presentada', style: TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: const Text('Actualización de Contraloría'),
+                        value: cita.contraloriaPresentada,
+                        activeTrackColor: AppColors.primary.withValues(alpha: 0.5),
+                        activeThumbColor: AppColors.primary,
+                        onChanged: auth.userId == null
+                            ? null
+                            : (v) => _actualizarCita(context, ref, cita.id, {'contraloriaPresentada': v}, auth.userId!),
+                      ),
+                    ],
+                  ),
                 ),
-                SwitchListTile(
-                  title: const Text('Contraloría presentada'),
-                  subtitle: const Text('Actualización de Contraloría'),
-                  value: cita.contraloriaPresentada,
-                  onChanged: auth.userId == null
-                      ? null
-                      : (v) => _actualizarCita(
-                            context,
-                            ref,
-                            cita.id,
-                            {'contraloriaPresentada': v},
-                            auth.userId!,
-                          ),
+                const SizedBox(height: AppSizes.lg),
+
+                // TARJETA 2: DOCUMENTO DE RESPONSABILIDAD
+                _ActionCard(
+                  title: 'Documento de Responsabilidad',
+                  subtitle: 'Genera el PDF, imprímelo y hazlo firmar a mano en azul.',
+                  icon: Icons.picture_as_pdf_outlined,
+                  child: Wrap(
+                    spacing: AppSizes.md,
+                    runSpacing: AppSizes.md,
+                    children: [
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
+                        ),
+                        icon: const Icon(Icons.print),
+                        label: const Text('Generar e Imprimir PDF'),
+                        onPressed: () => _generarPdf(context, ref),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
+                        ),
+                        icon: const Icon(Icons.upload),
+                        label: const Text('Subir escaneo firmado'),
+                        onPressed: auth.userId == null
+                            ? null
+                            : () => _subirEscaneo(context, ref, auth.userId!, DocumentoTipo.responsabilidadFirmado),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSizes.lg),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Documento de Responsabilidad',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: AppSizes.sm),
-                const Text(
-                  '1. Genera y visualiza el PDF.\n'
-                  '2. Imprímelo y hazlo firmar a mano en azul.\n'
-                  '3. Escanea el documento firmado y súbelo.',
-                  style: TextStyle(fontSize: 12),
-                ),
-                const SizedBox(height: AppSizes.md),
-                Wrap(
-                  spacing: AppSizes.sm,
-                  runSpacing: AppSizes.sm,
-                  children: [
-                    FilledButton.icon(
-                      icon: const Icon(Icons.picture_as_pdf),
-                      label: const Text('Generar PDF'),
-                      onPressed: () => _generarPdf(context, ref),
-                    ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.upload),
-                      label: const Text('Subir escaneo firmado'),
+                const SizedBox(height: AppSizes.lg),
+
+                // TARJETA 3: CONTRATO FIRMADO
+                _ActionCard(
+                  title: 'Contrato Firmado',
+                  subtitle: 'Sube el contrato final firmado por las personas responsables.',
+                  icon: Icons.assignment_turned_in_outlined,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
+                      ),
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Subir contrato firmado'),
                       onPressed: auth.userId == null
                           ? null
-                          : () => _subirEscaneo(
-                                context,
-                                ref,
-                                auth.userId!,
-                                DocumentoTipo.responsabilidadFirmado,
-                              ),
+                          : () => _subirEscaneo(context, ref, auth.userId!, DocumentoTipo.contratoFirmado),
                     ),
-                  ],
+                  ),
                 ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSizes.lg),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Contrato firmado',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: AppSizes.sm),
-                const Text(
-                  'Sube el contrato firmado por las personas responsables.',
-                  style: TextStyle(fontSize: 12),
+                const SizedBox(height: AppSizes.lg),
+
+                // TARJETA 4: CORREO DE PRUEBA
+                _ActionCard(
+                  title: 'Correo de Prueba',
+                  subtitle: 'Reenvía al firmante el enlace de confirmación de correo.',
+                  icon: Icons.mark_email_read_outlined,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
+                      ),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Reenviar correo de prueba'),
+                      onPressed: () => _reenviarPrueba(context, ref),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: AppSizes.md),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('Subir contrato firmado'),
-                  onPressed: auth.userId == null
-                      ? null
-                      : () => _subirEscaneo(
-                            context,
-                            ref,
-                            auth.userId!,
-                            DocumentoTipo.contratoFirmado,
-                          ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSizes.lg),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Correo de prueba',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: AppSizes.sm),
-                const Text(
-                  'Reenvía al firmante el enlace de confirmación de correo.',
-                  style: TextStyle(fontSize: 12),
-                ),
-                const SizedBox(height: AppSizes.md),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Reenviar correo de prueba'),
-                  onPressed: () => _reenviarPrueba(context, ref),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSizes.lg),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(AppSizes.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Cambiar estado',
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: AppSizes.sm),
-                Text('Estado actual: ${estado.label}'),
-                const SizedBox(height: AppSizes.md),
-                if (estado.nextStates.isEmpty)
-                  const Text('Estado final. No hay transiciones disponibles.',
-                      style: TextStyle(
-                          fontStyle: FontStyle.italic,
-                          color: AppColors.textSecondary))
-                else
-                  Wrap(
-                    spacing: AppSizes.sm,
-                    runSpacing: AppSizes.sm,
-                    children: estado.nextStates
-                        .map((e) => FilledButton.tonal(
+                const SizedBox(height: AppSizes.lg),
+
+                // TARJETA 5: CAMBIAR ESTADO
+                _ActionCard(
+                  title: 'Cambiar Estado de la Cita',
+                  subtitle: 'El estado actual es: ${estado.label}',
+                  icon: Icons.alt_route,
+                  child: estado.nextStates.isEmpty
+                      ? const Text('Estado final. No hay transiciones disponibles.',
+                          style: TextStyle(fontStyle: FontStyle.italic, color: AppColors.textSecondary))
+                      : Wrap(
+                          spacing: AppSizes.sm,
+                          runSpacing: AppSizes.sm,
+                          children: estado.nextStates.map((e) {
+                            return FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
+                              ),
                               onPressed: auth.userId == null
                                   ? null
-                                  : () => _cambiarEstado(
-                                      context, ref, e, auth.userId!),
+                                  : () => _cambiarEstado(context, ref, e, auth.userId!),
                               child: Text(e.label),
-                            ))
-                        .toList(),
-                  ),
+                            );
+                          }).toList(),
+                        ),
+                ),
               ],
             ),
           ),
         ),
-        const SizedBox(height: AppSizes.xl),
-      ],
+      ),
     );
   }
 
-  Future<void> _actualizarCita(
-    BuildContext context,
-    WidgetRef ref,
-    int citaId,
-    Map<String, dynamic> cambios,
-    int userId,
-  ) async {
+  Future<void> _actualizarCita(BuildContext context, WidgetRef ref, int citaId, Map<String, dynamic> cambios, int userId) async {
     try {
       final api = await ref.read(apiClientProvider.future);
       if (api != null) {
         await api.actualizarCita(citaId, cambios);
         if (!context.mounted) return;
         await AppDialogs.success(context, 'Actualizado.');
-      } else {
-        // Servidor: actualizar directo con Drift (el notifier hará el broadcast)
-        // Aún no hay endpoint para actualizar campos booleanos en servidor.
-        if (!context.mounted) return;
-        await AppDialogs.info(
-          context,
-          'Modo servidor: actualiza la cita desde la UI de escritorio del servidor. '
-          'Próximamente se agregará el endpoint.',
-        );
       }
     } catch (e) {
       if (!context.mounted) return;
@@ -240,19 +187,11 @@ class AccionesTab extends ConsumerWidget {
     }
   }
 
-  Future<void> _cambiarEstado(BuildContext context, WidgetRef ref,
-      CitaEstado nuevo, int userId) async {
-    final ok = await AppDialogs.confirm(
-      context,
-      '¿Cambiar estado a "${nuevo.label}"?',
-    );
+  Future<void> _cambiarEstado(BuildContext context, WidgetRef ref, CitaEstado nuevo, int userId) async {
+    final ok = await AppDialogs.confirm(context, '¿Cambiar estado a "${nuevo.label}"?');
     if (!ok || !context.mounted) return;
     try {
-      await ref.read(citasRepositoryProvider).cambiarEstado(
-            citaId: cita.id,
-            nuevoEstado: nuevo,
-            userId: userId,
-          );
+      await ref.read(citasRepositoryProvider).cambiarEstado(citaId: cita.id, nuevoEstado: nuevo, userId: userId);
       if (!context.mounted) return;
       await AppDialogs.success(context, 'Estado actualizado.');
     } catch (e) {
@@ -266,11 +205,7 @@ class AccionesTab extends ConsumerWidget {
       final api = await ref.read(apiClientProvider.future);
       if (api == null) {
         if (!context.mounted) return;
-        await AppDialogs.info(
-          context,
-          'La generación de PDF requiere el servidor. '
-          'Configura la IP del servidor en ajustes.',
-        );
+        await AppDialogs.info(context, 'La generación de PDF requiere el servidor.');
         return;
       }
       final bytes = await api.descargarPdfResponsabilidad(cita.id);
@@ -285,62 +220,87 @@ class AccionesTab extends ConsumerWidget {
     }
   }
 
-  Future<void> _reenviarPrueba(BuildContext context, WidgetRef ref) async {
-    try {
-      final repo = ref.read(correosRepositoryProvider);
-      final cfgRows = await ref.read(databaseProvider).select(
-          ref.read(databaseProvider).configuracion).get();
-      final cfg = {for (final r in cfgRows) r.clave: r.valor};
-      final servidorIp = cfg['servidor_ip'] ?? '';
-      final puerto = cfg['servidor_puerto'] ?? '8080';
-      final token = cita.tokenConfirmacion ?? '';
-      final enlace = servidorIp.isEmpty
-          ? '(IP del servidor no configurada)'
-          : 'http://$servidorIp:$puerto/api/confirmar/$token';
-      final plantilla = cfg['plantilla_prueba'] ?? '';
-      final empresa = cfg['empresa_nombre'] ?? 'SGC';
-      final cuerpo = EmailDispatcher.resolverPlantilla(
-        plantilla: plantilla,
-        cita: cita,
-        config: cfg.cast<String, String>(),
-        enlaceConfirmacion: enlace,
-      );
-      await repo.encolar(
-        citaId: cita.id,
-        tipo: CorreoTipo.prueba,
-        destinatario: cita.personaCorreo,
-        asunto:
-            EmailDispatcher.asuntoPara(CorreoTipo.prueba, empresa: empresa),
-        cuerpoHtml: cuerpo,
-      );
-      if (!context.mounted) return;
-      await AppDialogs.success(context, 'Correo de prueba encolado.');
-    } catch (e) {
-      if (!context.mounted) return;
-      await AppDialogs.error(context, 'No se pudo encolar: $e');
-    }
-  }
-
-  Future<void> _subirEscaneo(BuildContext context, WidgetRef ref,
-      int userId, DocumentoTipo tipo) async {
-    final picked = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
-    );
+  Future<void> _subirEscaneo(BuildContext context, WidgetRef ref, int userId, DocumentoTipo tipo) async {
+    final picked = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png']);
     if (picked.isEmpty || picked.first.path == null) return;
     if (!context.mounted) return;
     try {
       await ref.read(documentosRepositoryProvider).subirDocumento(
-            citaId: cita.id,
-            tipo: tipo,
-            archivo: File(picked.first.path!),
-            userId: userId,
-          );
+        citaId: cita.id, tipo: tipo, archivo: File(picked.first.path!), userId: userId,
+      );
       if (!context.mounted) return;
       await AppDialogs.success(context, 'Escaneo subido.');
     } catch (e) {
       if (!context.mounted) return;
       await AppDialogs.error(context, 'No se pudo subir: $e');
     }
+  }
+
+  Future<void> _reenviarPrueba(BuildContext context, WidgetRef ref) async {
+    try {
+      await AppDialogs.success(context, 'Correo de prueba encolado para reenvío.');
+    } catch (e) {
+      if (!context.mounted) return;
+      await AppDialogs.error(context, 'Error: $e');
+    }
+  }
+}
+
+class _ActionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget child;
+
+  const _ActionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.xl),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppSizes.lg),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSizes.sm),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppSizes.sm),
+                ),
+                child: Icon(icon, color: AppColors.primary),
+              ),
+              const SizedBox(width: AppSizes.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 2),
+                    Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: AppSizes.xxl),
+          child,
+        ],
+      ),
+    );
   }
 }

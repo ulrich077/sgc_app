@@ -64,6 +64,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/login',
         builder: (context, state) => const LoginScreen(),
       ),
+      // ENVOLVEMOS TODAS LAS RUTAS INTERNAS EN EL SHELL
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [

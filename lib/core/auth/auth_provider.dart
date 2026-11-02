@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../data/database/app_database.dart';
@@ -10,7 +11,19 @@ import 'auth_state.dart';
 const _kStorageKeyUserId = 'sgc_user_id';
 
 class AuthNotifier extends Notifier<AuthState> {
-  final _storage = const FlutterSecureStorage();
+  // Esta función arma la configuración correcta sin romper el tipado
+  static FlutterSecureStorage _buildStorage() {
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      return const FlutterSecureStorage(
+        mOptions: MacOsOptions(
+          usesDataProtectionKeychain: false,
+        ),
+      );
+    }
+    return const FlutterSecureStorage();
+  }
+
+  final _storage = _buildStorage();
 
   AppDatabase get _db => ref.read(databaseProvider);
 
@@ -77,7 +90,12 @@ class AuthNotifier extends Notifier<AuthState> {
         .getSingleOrNull();
     if (rol == null) return 'Rol no encontrado. Contacta al administrador.';
 
-    await _storage.write(key: _kStorageKeyUserId, value: user.id.toString());
+    try {
+      await _storage.write(key: _kStorageKeyUserId, value: user.id.toString());
+    } catch (_) {
+      // Si falla el storage en macOS, al menos dejamos pasar la sesión actual
+    }
+
     state = AuthState.authenticated(
       userId: user.id,
       username: user.username,
@@ -89,7 +107,9 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
-    await _storage.delete(key: _kStorageKeyUserId);
+    try {
+      await _storage.delete(key: _kStorageKeyUserId);
+    } catch (_) {}
     state = const AuthState.unauthenticated();
   }
 

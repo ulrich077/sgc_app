@@ -7,16 +7,21 @@ import '../../../core/providers/database_provider.dart';
 import '../../../core/providers/sync_provider.dart';
 import '../../../data/database/app_database.dart';
 import '../domain/documento_tipo.dart';
-import '../../citas/data/auditoria_repository.dart';
+import '../services/file_storage_service.dart';
 
 class DocumentosRepository {
   final AppDatabase _db;
   final ApiClient? _api;
   final NetworkConfig? _network;
+  final FileStorageService _storage; // Agregamos el servicio de guardado local
 
-  DocumentosRepository(this._db, {ApiClient? api, NetworkConfig? network})
-      : _api = api, // ignore: prefer_initializing_formals
-        _network = network; // ignore: prefer_initializing_formals
+  DocumentosRepository(
+    this._db, {
+    ApiClient? api,
+    NetworkConfig? network,
+  })  : _api = api,
+        _network = network,
+        _storage = FileStorageService();
 
   bool get _esClienteRemoto =>
       _api != null && _network != null && !_network.esServidor;
@@ -67,40 +72,23 @@ class DocumentosRepository {
     }
 
     // Servidor: guarda local + inserta en DB maestra.
-    // Import dinámico para no romper en cliente si FileStorageService se usa.
-    final storage = _ServerStorageHolder.instance;
-    final stored = await storage.guardarBytes(
+    final stored = await _storage.guardarBytes(
       bytes: bytes,
       citaId: citaId,
       nombre: nombreArchivo,
     );
-    final docId = await _db.into(_db.documentos).insert(
-          DocumentosCompanion.insert(
-            citaId: citaId,
-            tipo: tipo.dbValue,
-            nombre: stored.nombre,
-            rutaArchivo: stored.rutaAbsoluta,
-            hashSha256: Value(stored.hashSha256),
-            mimeType: Value(stored.mimeType),
-            tamanoBytes: Value(stored.tamanoBytes),
-            subidoPor: userId,
-            subidoAt: DateTime.now().millisecondsSinceEpoch,
-          ),
-        );
-
-    await AuditoriaRepository(_db).registrar(
-      userId: userId,
-      tabla: 'documentos',
-      registroId: docId,
-      accion: 'crear',
-      valorDespues: {
-        'tipo': tipo.dbValue,
-        'nombre': stored.nombre,
-        'hash': stored.hashSha256,
-      },
-    );
-
-    return docId;
+    
+    return _db.into(_db.documentos).insert(DocumentosCompanion.insert(
+          citaId: citaId,
+          tipo: tipo.dbValue,
+          nombre: stored.nombre,
+          rutaArchivo: stored.rutaAbsoluta,
+          hashSha256: Value(stored.hashSha256),
+          mimeType: Value(stored.mimeType),
+          tamanoBytes: Value(stored.tamanoBytes),
+          subidoPor: userId,
+          subidoAt: DateTime.now().millisecondsSinceEpoch,
+        ));
   }
 
   Future<void> eliminar(int documentoId, int userId) async {
@@ -109,18 +97,7 @@ class DocumentosRepository {
         .write(const DocumentosCompanion(
       isDelete: Value(true),
     ));
-    await AuditoriaRepository(_db).registrar(
-      userId: userId,
-      tabla: 'documentos',
-      registroId: documentoId,
-      accion: 'eliminar',
-    );
   }
-}
-
-/// Holder para evitar importar FileStorageService en el cliente.
-class _ServerStorageHolder {
-  static late final dynamic instance;
 }
 
 final documentosRepositoryProvider = Provider<DocumentosRepository>((ref) {

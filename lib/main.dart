@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_strings.dart';
+import 'core/network/network_config.dart';
 import 'core/providers/database_provider.dart';
 import 'core/providers/theme_colors_provider.dart';
 import 'core/router/app_router.dart';
 import 'features/wizard/primer_arranque_screen.dart';
+import 'server/email_queue_worker.dart';
+import 'server/sgc_server.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,6 +47,9 @@ class SgcApp extends ConsumerWidget {
             home: PrimerArranqueScreen(),
           );
         }
+        
+        ref.watch(_serverBootProvider);
+
         return MaterialApp.router(
           title: AppStrings.appFullName,
           debugShowCheckedModeBanner: false,
@@ -68,4 +74,20 @@ final _wizardGateProvider = FutureProvider<bool>((ref) async {
         ..where((t) => t.clave.equals('wizard_completado')))
       .getSingleOrNull();
   return row?.valor == 'true';
+});
+
+final _serverBootProvider = FutureProvider<void>((ref) async {
+  final cfg = await ref.watch(networkConfigProvider.future);
+  if (!cfg.esServidor) return;
+
+  final db = ref.watch(databaseProvider);
+  final server = SgcServer(db);
+  final worker = EmailQueueWorker(db)..start();
+
+  await server.start(host: '0.0.0.0', port: cfg.puerto);
+
+  ref.onDispose(() {
+    worker.stop();
+    server.stop();
+  });
 });

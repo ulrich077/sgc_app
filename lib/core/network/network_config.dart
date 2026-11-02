@@ -13,9 +13,7 @@ class NetworkConfig {
   });
 
   String get baseHttp => 'http://$servidorIp:$puerto';
-
   String get baseWs => 'ws://$servidorIp:$puerto/api/ws';
-
   bool get configurado => esServidor || servidorIp.trim().isNotEmpty;
 }
 
@@ -24,8 +22,15 @@ final networkConfigProvider = FutureProvider<NetworkConfig>((ref) async {
   final rows = await db.select(db.configuracion).get();
   final map = {for (final r in rows) r.clave: r.valor};
   final esServidor = (map['es_servidor'] ?? 'false') == 'true';
-  final ip = map['servidor_ip'] ?? '';
+  
+  // Forzamos la IP local si está vacía o es nula
+  String ip = map['servidor_ip'] ?? '';
+  if (ip.trim().isEmpty) {
+    ip = '127.0.0.1';
+  }
+  
   final puerto = int.tryParse(map['servidor_puerto'] ?? '') ?? 8080;
+  
   return NetworkConfig(
     esServidor: esServidor,
     servidorIp: ip,

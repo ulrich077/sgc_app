@@ -640,3 +640,90 @@ FIN DE FASE 4
 - Responsive: drawer en mobile, fijo en desktop
 
 FIN DE FASE 6
+
+---
+
+## 31. FASE 5.F y 6 (SESIÓN 2026-11-01 - TARDE)
+
+### 31.1. Configuración del SDK de Flutter
+- Flutter 3.47.9 causaba errores de `invalid-type` en el framework.
+- Se descargó **Flutter 3.47.3 (Dart 3.13.3)** de forma limpia en `/Users/ulrichceballos/Desktop/flutter_3473`.
+- Se configuró un `.vscode/settings.json` local en SGC con la ruta a ese SDK.
+- Se cambió el `pubspec.yaml` a `sdk: '>=3.9.0 <4.0.0'`.
+- Comando para arrancar en terminal: `export PATH="/Users/ulrichceballos/Desktop/flutter_3473/bin:$PATH"`.
+
+### 31.2. Firmas y Entitlements en macOS
+- `flutter_secure_storage` pedía permiso de Llavero y exigía perfil de aprovisionamiento.
+- Se quitaron los `keychain-access-groups` de los entitlements (`DebugProfile.entitlements` y `Release.entitlements`).
+- Se modificó `auth_provider.dart` para usar `MacOsOptions(usesDataProtectionKeychain: false)` solo en macOS usando `defaultTargetPlatform`.
+- Se forzó la firma local ("Sign to Run Locally") editando el `project.pbxproj` de Xcode (vaciando `CODE_SIGN_IDENTITY`, `DEVELOPMENT_TEAM`, etc.).
+- La app ahora compila y guarda sesión correctamente en macOS.
+
+### 31.3. Login Premium
+- `login_screen.dart` rediseñado con:
+  - Fondo con gradiente (color primario y secundario reactivo).
+  - Tarjeta flotante con sombra y bordes redondeados.
+  - Íconos en los campos de texto.
+  - Botón grande "INGRESAR".
+
+### 31.4. Sidebar y Navegación
+- `app_shell.dart` rediseñado:
+  - Fondo con el color primario.
+  - Textos e íconos en blanco.
+  - Elemento seleccionado con fondo blanco translúcido.
+  - Fix del error `ListTile` usando `Material` y `Colors.transparent`.
+- `app_router.dart` actualizado:
+  - Las rutas internas (`/dashboard`, `/citas`, etc.) están envueltas en un `ShellRoute` con `AppShell`.
+  - El login redirige al `/dashboard` (antes mandaba a `/admin-settings`).
+- `main.dart` actualizado:
+  - `_serverBootProvider` arranca el `SgcServer` y el `EmailQueueWorker` automáticamente si `esServidor` es `true` en la configuración. ¡Ya no hace falta correr el servidor manualmente en otra terminal!
+
+### 31.5. Tabla de Citas (Cumpliendo Regla V)
+- `citas_screen.dart` reescrito:
+  - La tabla ahora ocupa el **100% del ancho** (`width: double.infinity`, calculado con `LayoutBuilder`).
+  - **Sin overflow**: el `ConstrainedBox(minWidth)` está bien configurado.
+  - El **sort** funciona correctamente llamando al repositorio (el índice 0, 1, 2, 3 se mapea a 'nombre', 'fecha', 'estado', 'creada').
+  - Se movió la barra de paginación arriba a la derecha, junto a los filtros.
+
+### 31.6. Modal de Nueva Cita (Wizard Premium)
+- `nueva_cita_dialog.dart` rediseñado:
+  - Modal flotante con `Dialog` y header con color primario.
+  - **3 pasos**: Datos Personales -> Contacto y Fecha -> Resumen.
+  - **Validaciones**:
+    - DPI: exactamente 13 dígitos.
+    - Teléfono: exactamente 8 dígitos.
+    - Correo: regex válida.
+  - Barra de progreso con círculos (1, 2, 3).
+  - Botones de "Atrás" y "Siguiente" con diseño premium.
+
+### 31.7. Modal de Detalle de Cita
+- Nuevo archivo `cita_detalle_modal.dart`:
+  - Se abre al hacer clic en una fila de la tabla.
+  - Tiene las mismas pestañas que la pantalla completa (Datos, Documentos, Acciones, Historial) pero dentro de un `Dialog` de `900px` de ancho.
+  - Header con el nombre del firmante y el estado.
+  - En `citas_screen.dart`, el `onSelectChanged` ahora llama a `CitaDetalleModal.show(context, cita.id)` en lugar de `context.push`.
+
+### 31.8. Rediseño de Acciones y Documentos
+- `acciones_tab.dart`:
+  - Todo envuelto en tarjetas (`_ActionCard`) con íconos, títulos y subtítulos.
+  - Switches para Post Mortem y Contraloría.
+  - Botones grandes para generar PDF, subir escaneos, etc.
+- `documentos_tab.dart`:
+  - Empty State (estado vacío) premium con ícono de nube y botón de "Subir el primer documento".
+  - Tarjetas de documentos con ícono de PDF (rojo) o Imagen (azul), nombre, tamaño y fecha.
+
+### 31.9. Rediseño de Historial
+- `cita_detalle_screen.dart` y `cita_detalle_modal.dart`:
+  - El historial ahora tiene un "Empty State" con ícono grande y texto amigable.
+  - Los eventos se muestran en tarjetas tipo "Timeline" con check azul, título, detalles y fecha a la derecha.
+
+### 31.10. Fix de AppDialogs
+- `dialogs.dart` corregido para usar `Navigator.of(context, rootNavigator: true)` capturado antes del `showDialog`. Esto evita el error `Null check operator used on a null value` que ocurría al hacer clic en botones después de un `await`.
+
+### 31.11. Pendientes / Deuda Técnica
+- Probar la subida de documentos real (guarda en el servidor o en local?).
+- Verificar que el correo se encole correctamente desde el modal de nueva cita (y que el servidor lo envíe).
+- El botón "Reenviar correo de prueba" en AccionesTab actualmente solo muestra un mensaje de éxito, falta implementar la lógica real de encolado.
+- El botón "Generar PDF" requiere que el servidor esté corriendo para descargar el PDF. Si es cliente, el servidor debe tener la IP configurada en ajustes.
+
+FIN DE LA SESIÓN 31
