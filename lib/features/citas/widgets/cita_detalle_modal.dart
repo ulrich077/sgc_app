@@ -109,23 +109,104 @@ class _HistorialTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = EventosRepository(ref.watch(databaseProvider));
+    final repo = ref.watch(eventosRepositoryProvider);
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
-    return StreamBuilder<List<dynamic>>(
+
+    return StreamBuilder<List<EventosCitaData>>(
       stream: repo.watchPorCita(citaId),
       builder: (context, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
         final eventos = snap.data!;
-        if (eventos.isEmpty) return const Center(child: Text('No hay historial.'));
+        
+        if (eventos.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.history, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No hay historial registrado aún.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+              ],
+            ),
+          );
+        }
+
         return ListView.builder(
           padding: const EdgeInsets.all(AppSizes.xl),
           itemCount: eventos.length,
           itemBuilder: (context, i) {
             final e = eventos[i];
-            return ListTile(
-              leading: const Icon(Icons.check_circle, color: AppColors.primary),
-              title: Text(e.tipoEvento),
-              subtitle: Text(dateFmt.format(DateTime.fromMillisecondsSinceEpoch(e.createdAt * 1000))),
+            // REGLA VI: Multiplicamos por 1000 para Flutter
+            final fecha = DateTime.fromMillisecondsSinceEpoch(e.createdAt * 1000);
+            
+            return Card(
+              elevation: 0,
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  // Mostrar los detalles si existen
+                  if (e.detalleJson != null && e.detalleJson!.isNotEmpty) {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text(e.tipoEvento.replaceAll('_', ' ').toUpperCase()),
+                        content: SingleChildScrollView(
+                          child: Text(
+                            e.detalleJson!,
+                            style: const TextStyle(fontFamily: 'Courier', fontSize: 13),
+                          ),
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+                        ],
+                      ),
+                    );
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.check, color: AppColors.primary, size: 16),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              e.tipoEvento.replaceAll('_', ' ').toUpperCase(),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              dateFmt.format(fecha),
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            ),
+                            if (e.detalleJson != null && e.detalleJson!.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              const Text('Toca para ver detalles', style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.w600)),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+                    ],
+                  ),
+                ),
+              ),
             );
           },
         );

@@ -15,6 +15,7 @@ import '../../../data/database/app_database.dart';
 import '../../documentos/data/documentos_repository.dart';
 import '../../documentos/domain/documento_tipo.dart';
 import '../data/citas_repository.dart';
+import '../data/eventos_repository.dart';
 import '../domain/cita_estado.dart';
 
 class AccionesTab extends ConsumerStatefulWidget {
@@ -34,6 +35,17 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
   void dispose() {
     _subFinal?.cancel();
     super.dispose();
+  }
+
+  Future<void> _registrarEvento(String tipo, {Map<String, dynamic>? detalle}) async {
+    final auth = ref.read(authProvider);
+    final repo = EventosRepository(ref.read(databaseProvider));
+    await repo.registrar(
+      citaId: widget.cita.id,
+      tipoEvento: tipo,
+      detalle: detalle,
+      userId: auth.userId ?? 1,
+    );
   }
 
   Future<void> _enviarCorreoFinal() async {
@@ -137,6 +149,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                 if (result.isNotEmpty && result.first.path != null) {
                                   await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.postMortemEscaneo, archivo: File(result.first.path!), userId: auth.userId ?? 1);
                                   await CitasRepository(ref.read(databaseProvider)).cambiarCheckPostMortem(cita.id, true, auth.userId ?? 1);
+                                  await _registrarEvento('post_mortem_subido');
                                 }
                               },
                             )
@@ -147,6 +160,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                               onDelete: () async {
                                 await docsRepo.eliminar(hasPostMortem.id, auth.userId ?? 1);
                                 await CitasRepository(ref.read(databaseProvider)).cambiarCheckPostMortem(cita.id, false, auth.userId ?? 1);
+                                await _registrarEvento('post_mortem_eliminado');
                               },
                             ),
                           const SizedBox(height: 12),
@@ -158,6 +172,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                 if (result.isNotEmpty && result.first.path != null) {
                                   await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.contraloriaEscaneo, archivo: File(result.first.path!), userId: auth.userId ?? 1);
                                   await CitasRepository(ref.read(databaseProvider)).cambiarCheckContraloria(cita.id, true, auth.userId ?? 1);
+                                  await _registrarEvento('contraloria_subida');
                                 }
                               },
                             )
@@ -168,6 +183,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                               onDelete: () async {
                                 await docsRepo.eliminar(hasContraloria.id, auth.userId ?? 1);
                                 await CitasRepository(ref.read(databaseProvider)).cambiarCheckContraloria(cita.id, false, auth.userId ?? 1);
+                                await _registrarEvento('contraloria_eliminada');
                               },
                             ),
                         ],
@@ -216,6 +232,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                     final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
                                     if (result.isNotEmpty && result.first.path != null) {
                                       await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.responsabilidadFirmado, archivo: File(result.first.path!), userId: auth.userId ?? 1);
+                                    await _registrarEvento('responsabilidad_subida');
                                     }
                                   },
                                 )
@@ -225,6 +242,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                   onDownload: () => _abrirPdf(hasResp.rutaArchivo),
                                   onDelete: () async {
                                     await docsRepo.eliminar(hasResp.id, auth.userId ?? 1);
+                                    await _registrarEvento('responsabilidad_eliminada');
                                   },
                                 ),
                             ],
@@ -248,6 +266,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                   final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
                                   if (result.isNotEmpty && result.first.path != null) {
                                     await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.contratoFirmado, archivo: File(result.first.path!), userId: auth.userId ?? 1);
+                                    await _registrarEvento('contrato_subido');
                                   }
                                 },
                               )
@@ -256,6 +275,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                 onDownload: () => _abrirPdf(hasContrato.rutaArchivo),
                                 onDelete: () async {
                                   await docsRepo.eliminar(hasContrato.id, auth.userId ?? 1);
+                                    await _registrarEvento('contrato_eliminado');
                                 },
                               )),
                     ),

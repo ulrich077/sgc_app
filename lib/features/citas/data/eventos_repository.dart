@@ -18,7 +18,7 @@ class EventosRepository {
           citaId: citaId,
           tipoEvento: tipoEvento,
           detalleJson: Value(detalle == null ? null : jsonEncode(detalle)),
-          createdAt: DateTime.now().millisecondsSinceEpoch,
+          createdAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
           createdBy: Value(userId),
         ));
   }
