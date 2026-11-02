@@ -32,9 +32,17 @@ class EmailDispatcher {
       dpi: cita.personaDpi,
       correo: cita.personaCorreo,
       fecha: nuevaFecha ?? fechaStr,
-      hora: horaStr, // <-- AGREGAMOS LA HORA
+      hora: horaStr,
       diasCgc: diasCgc,
       empresaNombre: config['empresa_nombre'] ?? '',
+      // NUEVOS CAMPOS DE CONTRALORÍA:
+      numeroContrato: cita.numeroContrato,
+      puesto: cita.puesto,
+      salario: cita.salario,
+      ubicacion: cita.ubicacion,
+      ubicacionEspecifica: cita.ubicacionEspecifica,
+      fechaInicio: cita.fechaInicio,
+      fechaFin: cita.fechaFin,
     );
 
     if (motivo != null && motivo.isNotEmpty) {
