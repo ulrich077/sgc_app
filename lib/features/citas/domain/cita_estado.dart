@@ -77,33 +77,20 @@ enum CitaEstado {
     }
   }
 
-  /// Transiciones válidas desde este estado.
   List<CitaEstado> get nextStates {
     switch (this) {
       case CitaEstado.citaCreada:
         return [CitaEstado.correoConfirmado, CitaEstado.cancelada];
       case CitaEstado.correoConfirmado:
-        return [
-          CitaEstado.enEsperaFirma,
-          CitaEstado.noSePresento,
-          CitaEstado.cancelada,
-        ];
+        return [CitaEstado.enEsperaFirma, CitaEstado.noSePresento, CitaEstado.cancelada];
       case CitaEstado.enEsperaFirma:
-        return [
-          CitaEstado.firmado,
-          CitaEstado.noSePresento,
-          CitaEstado.cancelada,
-        ];
+        return [CitaEstado.firmado, CitaEstado.noSePresento, CitaEstado.cancelada];
       case CitaEstado.firmado:
         return [CitaEstado.documentoSubido, CitaEstado.cancelada];
       case CitaEstado.documentoSubido:
         return [CitaEstado.pendienteEnvioContrato, CitaEstado.cancelada];
       case CitaEstado.pendienteEnvioContrato:
-        return [
-          CitaEstado.contratoEnviado,
-          CitaEstado.vencida,
-          CitaEstado.cancelada,
-        ];
+        return [CitaEstado.contratoEnviado, CitaEstado.vencida, CitaEstado.cancelada];
       case CitaEstado.contratoEnviado:
         return [CitaEstado.cerrada];
       case CitaEstado.noSePresento:

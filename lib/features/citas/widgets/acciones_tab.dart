@@ -15,7 +15,6 @@ import '../../../data/database/app_database.dart';
 import '../../documentos/data/documentos_repository.dart';
 import '../../documentos/domain/documento_tipo.dart';
 import '../data/citas_repository.dart';
-import '../data/eventos_repository.dart';
 import '../domain/cita_estado.dart';
 
 class AccionesTab extends ConsumerStatefulWidget {
@@ -37,17 +36,6 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
     super.dispose();
   }
 
-  Future<void> _registrarEvento(String tipo, {Map<String, dynamic>? detalle}) async {
-    final auth = ref.read(authProvider);
-    final repo = EventosRepository(ref.read(databaseProvider));
-    await repo.registrar(
-      citaId: widget.cita.id,
-      tipoEvento: tipo,
-      detalle: detalle,
-      userId: auth.userId ?? 1,
-    );
-  }
-
   Future<void> _enviarCorreoFinal() async {
     setState(() { _enviandoFinal = true; _finalEnviado = false; });
     try {
@@ -55,20 +43,36 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
       final auth = ref.read(authProvider);
       final repo = CitasRepository(db);
       
+      // 1. Cambiamos el estado a CONTRATO_ENVIADO
       await repo.cambiarEstado(citaId: widget.cita.id, nuevoEstado: CitaEstado.contratoEnviado, userId: auth.userId ?? 1);
 
-      _subFinal?.cancel();
-      _subFinal = (db.select(db.correosLog)
-            ..where((t) => t.citaId.equals(widget.cita.id) & t.tipo.equals('final'))
-            ..orderBy([(t) => OrderingTerm.desc(t.id)])..limit(1))
-          .watchSingleOrNull().listen((correo) {
+      // 2. Polling para detectar el envío
+      bool enviado = false;
+      int intentos = 0;
+      
+      while (!enviado && intentos < 15) {
+        await Future.delayed(const Duration(seconds: 2));
+        
+        final correo = await (db.select(db.correosLog)
+              ..where((t) => t.citaId.equals(widget.cita.id) & t.tipo.equals('final'))
+              ..orderBy([(t) => OrderingTerm.desc(t.id)])..limit(1))
+            .getSingleOrNull();
+            
         if (correo != null && correo.estado == 'enviado') {
+          enviado = true;
           if (mounted) {
             setState(() { _enviandoFinal = false; _finalEnviado = true; });
             AppDialogs.success(context, '¡Contrato y Documentos enviados exitosamente!');
           }
         }
-      });
+        intentos++;
+      }
+      
+      if (!enviado && mounted) {
+        setState(() => _enviandoFinal = false);
+        AppDialogs.info(context, 'El correo está en cola. Revisa la pestaña de Ajustes > Cola de Correos para más detalles.');
+      }
+
     } catch (e) {
       if (mounted) { setState(() => _enviandoFinal = false); AppDialogs.error(context, 'Error al enviar: $e'); }
     }
@@ -133,9 +137,10 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // PASO 1
                     _PremiumCard(
                       stepNumber: 1,
-                      title: 'Documentos Físicos',
+                      title: 'Paso 1: Documentos Físicos',
                       subtitle: 'Suba el Post Mortem y la Contraloría.',
                       icon: FontAwesomeIcons.folderOpen,
                       isCompleted: paso1Completado,
@@ -149,7 +154,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                 if (result.isNotEmpty && result.first.path != null) {
                                   await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.postMortemEscaneo, archivo: File(result.first.path!), userId: auth.userId ?? 1);
                                   await CitasRepository(ref.read(databaseProvider)).cambiarCheckPostMortem(cita.id, true, auth.userId ?? 1);
-                                  await _registrarEvento('post_mortem_subido');
+                                  await CitasRepository(ref.read(databaseProvider)).cambiarEstado(citaId: cita.id, nuevoEstado: CitaEstado.firmado, userId: auth.userId ?? 1);
                                 }
                               },
                             )
@@ -160,7 +165,6 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                               onDelete: () async {
                                 await docsRepo.eliminar(hasPostMortem.id, auth.userId ?? 1);
                                 await CitasRepository(ref.read(databaseProvider)).cambiarCheckPostMortem(cita.id, false, auth.userId ?? 1);
-                                await _registrarEvento('post_mortem_eliminado');
                               },
                             ),
                           const SizedBox(height: 12),
@@ -172,7 +176,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                 if (result.isNotEmpty && result.first.path != null) {
                                   await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.contraloriaEscaneo, archivo: File(result.first.path!), userId: auth.userId ?? 1);
                                   await CitasRepository(ref.read(databaseProvider)).cambiarCheckContraloria(cita.id, true, auth.userId ?? 1);
-                                  await _registrarEvento('contraloria_subida');
+                                  await CitasRepository(ref.read(databaseProvider)).cambiarEstado(citaId: cita.id, nuevoEstado: CitaEstado.firmado, userId: auth.userId ?? 1);
                                 }
                               },
                             )
@@ -183,7 +187,6 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                               onDelete: () async {
                                 await docsRepo.eliminar(hasContraloria.id, auth.userId ?? 1);
                                 await CitasRepository(ref.read(databaseProvider)).cambiarCheckContraloria(cita.id, false, auth.userId ?? 1);
-                                await _registrarEvento('contraloria_eliminada');
                               },
                             ),
                         ],
@@ -191,9 +194,10 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                     ),
                     const SizedBox(height: 16),
 
+                    // PASO 2
                     _PremiumCard(
                       stepNumber: 2,
-                      title: 'Documento de Responsabilidad',
+                      title: 'Paso 2: Documento de Responsabilidad',
                       subtitle: 'Descargue, firme y suba el escaneo.',
                       icon: FontAwesomeIcons.fileSignature,
                       isLocked: !paso1Completado,
@@ -232,7 +236,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                     final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
                                     if (result.isNotEmpty && result.first.path != null) {
                                       await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.responsabilidadFirmado, archivo: File(result.first.path!), userId: auth.userId ?? 1);
-                                    await _registrarEvento('responsabilidad_subida');
+                                      await CitasRepository(ref.read(databaseProvider)).cambiarEstado(citaId: cita.id, nuevoEstado: CitaEstado.documentoSubido, userId: auth.userId ?? 1);
                                     }
                                   },
                                 )
@@ -242,7 +246,6 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                   onDownload: () => _abrirPdf(hasResp.rutaArchivo),
                                   onDelete: () async {
                                     await docsRepo.eliminar(hasResp.id, auth.userId ?? 1);
-                                    await _registrarEvento('responsabilidad_eliminada');
                                   },
                                 ),
                             ],
@@ -250,9 +253,10 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                     ),
                     const SizedBox(height: 16),
 
+                    // PASO 3
                     _PremiumCard(
                       stepNumber: 3,
-                      title: 'Contrato Firmado',
+                      title: 'Paso 3: Firma de Contrato',
                       subtitle: 'Suba el contrato escaneado.',
                       icon: FontAwesomeIcons.fileContract,
                       isLocked: !paso2Completado,
@@ -266,7 +270,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                   final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
                                   if (result.isNotEmpty && result.first.path != null) {
                                     await docsRepo.subirDocumento(citaId: cita.id, tipo: DocumentoTipo.contratoFirmado, archivo: File(result.first.path!), userId: auth.userId ?? 1);
-                                    await _registrarEvento('contrato_subido');
+                                    await CitasRepository(ref.read(databaseProvider)).cambiarEstado(citaId: cita.id, nuevoEstado: CitaEstado.pendienteEnvioContrato, userId: auth.userId ?? 1);
                                   }
                                 },
                               )
@@ -275,15 +279,15 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                 onDownload: () => _abrirPdf(hasContrato.rutaArchivo),
                                 onDelete: () async {
                                   await docsRepo.eliminar(hasContrato.id, auth.userId ?? 1);
-                                    await _registrarEvento('contrato_eliminado');
                                 },
                               )),
                     ),
                     const SizedBox(height: 16),
 
+                    // PASO 4
                     _PremiumCard(
                       stepNumber: 4,
-                      title: 'Enviar Correo Final',
+                      title: 'Paso 4: Enviar Correo Final',
                       subtitle: 'Notificar al firmante con los adjuntos.',
                       icon: FontAwesomeIcons.paperPlane,
                       isLocked: !procesoCompleto,
@@ -422,7 +426,6 @@ class _PremiumDocRow extends StatelessWidget {
   }
 }
 
-// CAMBIAMOS IconData POR FaIconData PARA QUE ACEPTE LOS ÍCONOS DE FONT AWESOME
 class _PremiumCard extends StatelessWidget {
   final int stepNumber;
   final String title;

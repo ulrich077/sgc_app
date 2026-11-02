@@ -46,3 +46,12 @@ XIV. GATE DE ANALYZE (BLOQUEANTE)
 ================================================================================
 FIN DE LA REGLA DE ORO MAESTRA — SGC v1.2
 ================================================================================
+
+### Regla XV: URLs y Caracteres de Escape
+- **Problema:** Al usar `sed` o `cat` para reescribir archivos con URLs como `http://$ip:$puerto/api/citas/${cita.id}/pdf`, el carácter `\` se cuela antes del `;` (ej. `pdf'\;`), rompiendo la sintaxis.
+- **Solución:** 
+  1. **No usar `$` ni `\` dentro de strings en los scripts de terminal.** 
+  2. **Construir la URL en Dart usando variables:**
+     ```dart
+     final baseUrl = 'http://$ip:$puerto';
+     final url = Uri.parse('$baseUrl/api/citas/${cita.id}/pdf');

@@ -86,3 +86,24 @@ Estado: Fase 2.11 (Rediseño UI Premium, Flujo de Documentos y Correos)
 ---
 
 FIN DE LA MEMORIA
+
+---
+
+## 7. HISTORIAL Y EVENTOS (2026-11-02)
+
+### 7.1. Registro de Eventos en Acciones
+- Se inyectó el `EventosRepository` en `acciones_tab.dart`.
+- Ahora cada vez que se sube o elimina un documento (Post Mortem, Contraloría, Responsabilidad, Contrato), se registra un evento en la tabla `eventos_cita`.
+- Los eventos se pueden ver en la pestaña **Historial** y al tocarlos se muestra un modal con el JSON de detalles (si existe).
+
+### 7.2. Corrección de Fechas en Eventos
+- Los eventos viejos se guardaron por error en milisegundos. Se ejecutó un `UPDATE` en SQLite para dividir entre 1000 y convertirlos a segundos.
+- El `EventosRepository` ahora guarda en segundos (`DateTime.now().millisecondsSinceEpoch ~/ 1000`).
+- La UI multiplica por 1000 para mostrar la fecha correcta (Regla VI).
+
+### 7.3. Orden del Historial
+- Se cambió el `orderBy` del `watchPorCita` para ordenar por `id` de forma descendente. Así, el último evento registrado siempre aparece arriba.
+
+---
+
+FIN DE LA ACTUALIZACIÓN
