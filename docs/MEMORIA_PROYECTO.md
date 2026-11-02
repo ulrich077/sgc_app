@@ -85,3 +85,30 @@ Se rediseñó `acciones_tab.dart` para el flujo exacto:
 ---
 
 FIN DE LA MEMORIA
+
+---
+
+## 5. FASE 2.10: FLUJO DE DOCUMENTOS Y ACCIONES (2026-11-02)
+
+### 5.1. Flujo de Acciones (Paso 1 al 4)
+- **Paso 1**: Se reemplazaron los switches por DropZones. Al subir un archivo (Post Mortem o Contraloría), se guarda en la DB y se activa el switch correspondiente.
+- **Paso 2 y 3**: Mantienen DropZones. Al subir, el switch se activa solo. Los archivos muestran una tarjeta verde con botones de descarga y eliminación.
+- **Paso 4**: Botón de "Enviar Correo Final". Escucha la DB hasta que el worker envía el correo (cambia a "¡Enviado!").
+
+### 5.2. Pestaña de Documentos
+- Se agregó `AutomaticKeepAliveClientMixin` para que la pestaña escuche los cambios en tiempo real (Regla III). Al subir un archivo en Acciones, aparece inmediatamente en Documentos.
+- Cada tarjeta de documento ahora tiene un botón de **Eliminar** (con confirmación de `AppDialogs.confirm`).
+- El tamaño del archivo se muestra en formato legible (KB/MB).
+- Se restauró el botón de **Subir Documento** (para escaneos adicionales).
+
+### 5.3. PDF de Responsabilidad
+- Se agregó el logo de la DB (`empresa_logo_base64`) al PDF.
+- Se ajustaron los márgenes a 1 pulgada.
+- La fecha se muestra como "Guatemala 02 de noviembre del 2026".
+- Se cambió "colaborador" por "contratado".
+- Se eliminó el encabezado del Congreso y se dejó solo el nombre del departamento.
+- Se cambió "Firma del(a) declarante" por "Firma".
+
+---
+
+FIN DE LA ACTUALIZACIÓN

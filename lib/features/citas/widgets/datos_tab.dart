@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -23,14 +21,6 @@ class DatosTab extends ConsumerStatefulWidget {
 
 class _DatosTabState extends ConsumerState<DatosTab> {
   bool _loadingReenvio = false;
-  bool _enviado = false;
-  StreamSubscription? _sub;
-
-  @override
-  void dispose() {
-    _sub?.cancel();
-    super.dispose();
-  }
 
   Future<void> _editarCorreo() async {
     final ctrl = TextEditingController(text: widget.cita.personaCorreo);
@@ -84,170 +74,135 @@ class _DatosTabState extends ConsumerState<DatosTab> {
   }
 
   Future<void> _reenviarCorreo() async {
-    setState(() {
-      _loadingReenvio = true;
-      _enviado = false;
-    });
-
+    setState(() => _loadingReenvio = true);
     try {
-      final db = ref.read(databaseProvider);
-      final repo = CitasRepository(db);
-      
-      // 1. Encolamos el correo
+      final repo = CitasRepository(ref.read(databaseProvider));
       await repo.reenviarCorreoPrueba(widget.cita.id);
-
-      // 2. Nos ponemos a escuchar la DB hasta que el worker lo envíe
-      _sub?.cancel();
-      _sub = (db.select(db.correosLog)
-            ..where((t) => t.citaId.equals(widget.cita.id) & t.tipo.equals('prueba'))
-            ..orderBy([(t) => OrderingTerm.desc(t.id)])
-            ..limit(1))
-          .watchSingleOrNull()
-          .listen((correo) {
-        if (correo != null && correo.estado == 'enviado') {
-          if (mounted) {
-            setState(() {
-              _loadingReenvio = false;
-              _enviado = true;
-            });
-            AppDialogs.success(context, '¡Correo enviado exitosamente!');
-            
-            // Regresar el botón a la normalidad después de 3 segundos
-            Future.delayed(const Duration(seconds: 3), () {
-              if (mounted) setState(() => _enviado = false);
-            });
-          }
-        }
-      });
-
-      // Cancelar la escucha después de 2 minutos para no dejar hilos abiertos
-      Future.delayed(const Duration(minutes: 2), () {
-        _sub?.cancel();
-        if (mounted && _loadingReenvio) setState(() => _loadingReenvio = false);
-      });
-
+      if (mounted) AppDialogs.success(context, 'Correo de prueba encolado para reenvío.');
     } catch (e) {
-      if (mounted) {
-        setState(() => _loadingReenvio = false);
-        AppDialogs.error(context, 'Error al reenviar: $e');
-      }
+      if (mounted) AppDialogs.error(context, 'Error al reenviar: $e');
+    } finally {
+      if (mounted) setState(() => _loadingReenvio = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
-    // REGLA VI: La DB guarda segundos, multiplicamos por 1000.
     final fecha = DateTime.fromMillisecondsSinceEpoch(widget.cita.fechaHoraFirma * 1000);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSizes.xl),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _InfoCard(
-            title: 'Información Personal',
-            icon: Icons.person_outline,
-            children: [
-              _InfoRow(label: 'Nombre', value: widget.cita.personaNombre),
-              _InfoRow(label: 'DPI', value: widget.cita.personaDpi ?? '—'),
-              _InfoRow(label: 'Teléfono', value: widget.cita.personaTelefono ?? '—'),
-            ],
-          ),
-          const SizedBox(height: AppSizes.lg),
-          _InfoCard(
-            title: 'Contacto y Cita',
-            icon: Icons.event_outlined,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _InfoRow(label: 'Correo Electrónico', value: widget.cita.personaCorreo),
-                  ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.edit, size: 16),
-                    label: const Text('Editar'),
-                    onPressed: _editarCorreo,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    icon: _loadingReenvio
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                        : _enviado
-                            ? const Icon(Icons.check_circle, size: 16, color: Colors.green)
-                            : const Icon(Icons.send, size: 16),
-                    label: Text(
-                      _loadingReenvio ? 'Enviando...' : _enviado ? '¡Enviado!' : 'Reenviar',
-                      style: TextStyle(color: _enviado ? Colors.green : null),
-                    ),
-                    onPressed: (_loadingReenvio || _enviado) ? null : _reenviarCorreo,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      visualDensity: VisualDensity.compact,
-                      side: _enviado ? const BorderSide(color: Colors.green) : null,
-                    ),
-                  ),
-                ],
-              ),
-              _InfoRow(label: 'Fecha y Hora de Firma', value: dateFmt.format(fecha)),
-              _InfoRow(label: 'Estado Actual', value: widget.estado.label),
-            ],
-          ),
-          const SizedBox(height: AppSizes.lg),
-          if (widget.cita.notas != null && widget.cita.notas!.isNotEmpty)
-            _InfoCard(
-              title: 'Notas Adicionales',
-              icon: Icons.notes,
+    return Container(
+      color: const Color(0xFFF4F7F9), // Fondo gris suave para unificar con Acciones
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSizes.xl),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 850),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(widget.cita.notas!, style: const TextStyle(color: AppColors.textPrimary)),
+                _PremiumCard(
+                  title: 'Información Personal',
+                  icon: Icons.person_outline,
+                  children: [
+                    _InfoRow(label: 'Nombre Completo', value: widget.cita.personaNombre),
+                    _InfoRow(label: 'Documento (DPI)', value: widget.cita.personaDpi ?? '—'),
+                    _InfoRow(label: 'Teléfono', value: widget.cita.personaTelefono ?? '—'),
+                  ],
+                ),
+                const SizedBox(height: AppSizes.lg),
+
+                _PremiumCard(
+                  title: 'Contacto y Cita',
+                  icon: Icons.event_outlined,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: _InfoRow(label: 'Correo Electrónico', value: widget.cita.personaCorreo)),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.edit, size: 16),
+                          label: const Text('Editar'),
+                          onPressed: _editarCorreo,
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: _loadingReenvio
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.send, size: 16),
+                          label: Text(_loadingReenvio ? 'Enviando' : 'Reenviar'),
+                          onPressed: _loadingReenvio ? null : _reenviarCorreo,
+                        ),
+                      ],
+                    ),
+                    _InfoRow(label: 'Fecha y Hora de Firma', value: dateFmt.format(fecha)),
+                    _InfoRow(label: 'Estado Actual', value: widget.estado.label),
+                  ],
+                ),
+                const SizedBox(height: AppSizes.lg),
+
+                if (widget.cita.notas != null && widget.cita.notas!.isNotEmpty)
+                  _PremiumCard(
+                    title: 'Notas Adicionales',
+                    icon: Icons.notes,
+                    children: [
+                      Text(widget.cita.notas!, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
+                    ],
+                  ),
               ],
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final List<Widget> children;
-
-  const _InfoCard({required this.title, required this.icon, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppSizes.lg),
-        side: const BorderSide(color: AppColors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSizes.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon, color: AppColors.primary),
-                const SizedBox(width: AppSizes.sm),
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              ],
-            ),
-            const Divider(height: AppSizes.xl),
-            ...children,
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
+// TARJETA PREMIUM UNIFICADA
+class _PremiumCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+
+  const _PremiumCard({required this.title, required this.icon, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: AppColors.primary, size: 24),
+              const SizedBox(width: 12),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textPrimary)),
+            ],
+          ),
+          const Divider(height: 32, color: Color(0xFFEEEEEE)),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+// FILA DE INFORMACIÓN
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
@@ -257,16 +212,16 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 140,
-            child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+            width: 160,
+            child: Text(label, style: const TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w500, fontSize: 14)),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimary, fontSize: 14)),
           ),
         ],
       ),
