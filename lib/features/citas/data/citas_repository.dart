@@ -146,7 +146,9 @@ class CitasRepository {
     final plantilla = cfg['plantilla_prueba'] ?? '';
     final empresa = cfg['empresa_nombre'] ?? 'SGC';
 
-    final cita = Cita(
+    // Obtener la cita completa desde la DB para tener todos los datos
+    final citaCompleta = await porId(id);
+    final cita = citaCompleta ?? Cita(
       id: id,
       uuidPublico: '',
       personaNombre: personaNombre,
@@ -171,6 +173,14 @@ class CitasRepository {
       userUpdated: null,
       dateUpdated: null,
       isDelete: false,
+      // Aseguramos que los campos nuevos se pasen si es la primera vez
+      numeroContrato: null,
+      puesto: null,
+      salario: null,
+      ubicacion: null,
+      ubicacionEspecifica: null,
+      fechaInicio: null,
+      fechaFin: null,
     );
 
     final cuerpo = EmailDispatcher.resolverPlantilla(

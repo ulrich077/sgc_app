@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/router/app_router.dart';
@@ -47,7 +48,6 @@ class _ServerBootGateState extends ConsumerState<ServerBootGate> {
         final server = SgcServer(db);
         await server.start(host: '0.0.0.0', port: 8080);
         
-        // Iniciar el Worker de correos (Pasando solo la DB si es lo que espera)
         EmailQueueWorker(db).start(intervalo: const Duration(seconds: 5));
         debugPrint('✅ Servidor y Worker de correos iniciados.');
       } else {
@@ -96,6 +96,17 @@ class SgcApp extends ConsumerWidget {
             scaffoldBackgroundColor: const Color(0xFFF8F9FA),
           ),
           routerConfig: router,
+          // AGREGAMOS LOS DELEGADOS Y EL IDIOMA
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('es', 'ES'),
+            Locale('en', 'US'),
+          ],
+          locale: const Locale('es', 'ES'),
         );
       },
     );
