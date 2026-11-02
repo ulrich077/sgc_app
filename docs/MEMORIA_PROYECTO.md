@@ -61,7 +61,7 @@ Se rediseñó `acciones_tab.dart` para el flujo exacto:
 
 ---
 
-## 3. PROBLEMAS RESUELTOS
+## 3. PROBLEMAS RESUELTOS EN ESTA SESIÓN
 
 | Problema | Solución |
 |---|---|
@@ -69,6 +69,7 @@ Se rediseñó `acciones_tab.dart` para el flujo exacto:
 | Error `LocaleDataException` | Se agregó `initializeDateFormatting('es_ES', null)` en `main.dart`. |
 | SnackBar en Ajustes | Reemplazados por `AppDialogs.success`. |
 | Correos atascados en `pendiente` | Faltaba el arranque del `EmailQueueWorker` en `main.dart`. |
+| `EventoCitaData` no encontrado | Se cambió a `dynamic` en los `StreamBuilder` del Historial. |
 | PDF de Responsabilidad no descarga | El botón está maquetado, falta conectar con el `PdfService` o API del servidor. |
 
 ---

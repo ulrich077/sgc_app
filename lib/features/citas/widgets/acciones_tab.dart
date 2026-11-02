@@ -71,8 +71,23 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
   }
 
   Future<void> _generarYDescargarPdf(Cita cita) async {
-    // TODO: Conectar con el endpoint del servidor para generar el PDF real.
-    AppDialogs.info(context, 'Generando PDF de Responsabilidad... (Función en desarrollo)');
+    try {
+      if (mounted) AppDialogs.info(context, 'Generando PDF en el servidor...');
+      
+      final db = ref.read(databaseProvider);
+      final cfgRows = await db.select(db.configuracion).get();
+      final cfg = {for (final r in cfgRows) r.clave: r.valor};
+      final ip = cfg['es_servidor'] == 'true' ? '127.0.0.1' : (cfg['servidor_ip'] ?? '127.0.0.1');
+      final puerto = cfg['servidor_puerto'] ?? '8080';
+      
+      final url = 'http://$ip:$puerto/api/citas/${cita.id}/pdf';
+      
+      if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) {
+        throw Exception('No se pudo abrir el enlace');
+      }
+    } catch (e) {
+      if (mounted) AppDialogs.error(context, 'Error al generar PDF: $e');
+    }
   }
 
   @override
@@ -96,19 +111,18 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                 final hasResp = docs.where((d) => d.tipo == DocumentoTipo.responsabilidadFirmado.dbValue).firstOrNull;
                 final hasContrato = docs.where((d) => d.tipo == DocumentoTipo.contratoFirmado.dbValue).firstOrNull;
                 
-                // El paso 3 solo se habilita si se subió el doc de responsabilidad firmado
                 final bool paso3Habilitado = hasResp != null;
                 final bool procesoCompleto = hasResp != null && hasContrato != null;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // PASO 1: 4 SWITCHES
+                    // PASO 1: SOLO POST MORTEM Y CONTRALORÍA
                     _ActionCard(
                       title: 'Paso 1: Documentos Requeridos',
-                      subtitle: 'Marque los documentos que el firmante presentó.',
+                      subtitle: 'Marque si el firmante presentó el Post Mortem y la Contraloría.',
                       icon: Icons.assignment_turned_in_outlined,
-                      isCompleted: cita.postMortemPresentado && cita.contraloriaPresentada && hasResp != null && hasContrato != null,
+                      isCompleted: cita.postMortemPresentado && cita.contraloriaPresentada,
                       child: Column(
                         children: [
                           _CustomSwitch(
@@ -126,29 +140,12 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                               await CitasRepository(ref.read(databaseProvider)).cambiarCheckContraloria(cita.id, v, auth.userId ?? 1);
                             },
                           ),
-                          const SizedBox(height: AppSizes.sm),
-                          // Switches de documentos (se activan si hay documento)
-                          _CustomSwitch(
-                            title: 'Documento de Responsabilidad (Firmado)',
-                            value: hasResp != null,
-                            onChanged: (v) async {
-                              if (!v && hasResp != null) await docsRepo.eliminar(hasResp.id, auth.userId ?? 1);
-                            },
-                          ),
-                          const SizedBox(height: AppSizes.sm),
-                          _CustomSwitch(
-                            title: 'Contrato Firmado',
-                            value: hasContrato != null,
-                            onChanged: (v) async {
-                              if (!v && hasContrato != null) await docsRepo.eliminar(hasContrato.id, auth.userId ?? 1);
-                            },
-                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: AppSizes.lg),
 
-                    // PASO 2: DESCARGAR Y SUBIR RESPONSABILIDAD
+                    // PASO 2: RESPONSABILIDAD
                     _ActionCard(
                       title: 'Paso 2: Documento de Responsabilidad',
                       subtitle: 'Descargue el documento, fírmelo y súbalo escaneado.',
@@ -157,11 +154,10 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Botón para descargar el PDF generado por el sistema
                           OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: BorderSide(color: AppColors.primary),
+                              side: const BorderSide(color: AppColors.primary),
                             ),
                             icon: const Icon(Icons.download, color: AppColors.primary),
                             label: const Text('Descargar PDF de Responsabilidad', style: TextStyle(color: AppColors.primary)),
@@ -184,10 +180,9 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                               },
                             )
                           else
-                            _DocSubidoCard(
+                            _DocItem(
                               nombre: 'Documento de Responsabilidad Firmado', 
-                              icon: Icons.check_circle, 
-                              color: Colors.green,
+                              ruta: hasResp.rutaArchivo,
                               onDownload: () => _abrirPdf(hasResp.rutaArchivo),
                               onDelete: () async {
                                 await docsRepo.eliminar(hasResp.id, auth.userId ?? 1);
@@ -198,7 +193,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                     ),
                     const SizedBox(height: AppSizes.lg),
 
-                    // PASO 3: SUBIR CONTRATO FIRMADO (Solo si el paso 2 está listo)
+                    // PASO 3: CONTRATO FIRMADO
                     _ActionCard(
                       title: 'Paso 3: Subir Contrato Firmado',
                       subtitle: 'Arrastra el contrato escaneado.',
@@ -220,10 +215,9 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                                   }
                                 },
                               )
-                            : _DocSubidoCard(
+                            : _DocItem(
                                 nombre: 'Contrato Firmado', 
-                                icon: Icons.check_circle, 
-                                color: Colors.green,
+                                ruta: hasContrato.rutaArchivo,
                                 onDownload: () => _abrirPdf(hasContrato.rutaArchivo),
                                 onDelete: () async {
                                   await docsRepo.eliminar(hasContrato.id, auth.userId ?? 1);
@@ -232,7 +226,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
                     ),
                     const SizedBox(height: AppSizes.lg),
 
-                    // PASO 4: ENVIAR CORREO FINAL (Solo si todo está completo)
+                    // PASO 4: ENVIAR CORREO FINAL
                     _ActionCard(
                       title: 'Paso 4: Enviar Correo Final',
                       subtitle: 'Envía los documentos firmados al firmante.',
@@ -307,6 +301,7 @@ class _AccionesTabState extends ConsumerState<AccionesTab> {
   }
 }
 
+// SWITCH PREMIUM DEL PASO 1
 class _CustomSwitch extends StatelessWidget {
   final String title;
   final bool value;
@@ -332,37 +327,48 @@ class _CustomSwitch extends StatelessWidget {
   }
 }
 
-class _DocSubidoCard extends StatelessWidget {
+// ITEM DE DOCUMENTO PREMIUM (Paso 2 y 3)
+class _DocItem extends StatelessWidget {
   final String nombre;
-  final IconData icon;
-  final Color color;
+  final String ruta;
   final VoidCallback onDownload;
   final VoidCallback onDelete;
 
-  const _DocSubidoCard({required this.nombre, required this.icon, required this.color, required this.onDownload, required this.onDelete});
+  const _DocItem({required this.nombre, required this.ruta, required this.onDownload, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSizes.md),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        color: Colors.green.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(AppSizes.md),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color),
-          const SizedBox(width: AppSizes.md),
-          Expanded(child: Text(nombre, style: TextStyle(color: color, fontWeight: FontWeight.bold))),
-          IconButton(icon: const Icon(Icons.download, color: Colors.blue), tooltip: 'Descargar PDF', onPressed: onDownload),
-          IconButton(icon: const Icon(Icons.delete, color: Colors.red), tooltip: 'Eliminar y apagar switch', onPressed: onDelete),
+          const Icon(Icons.check_circle, color: Colors.green),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(nombre, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.download, color: AppColors.primary),
+            tooltip: 'Descargar PDF',
+            onPressed: onDownload,
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            tooltip: 'Eliminar documento',
+            onPressed: onDelete,
+          ),
         ],
       ),
     );
   }
 }
 
+// TARJETA GENERAL
 class _ActionCard extends StatelessWidget {
   final String title;
   final String subtitle;
