@@ -175,3 +175,38 @@ FIN DE LA ACTUALIZACIÓN
 ---
 
 FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 11. FASE 2.14: CORRECCIONES FINALES DE CORREOS Y UX (2026-11-02)
+
+### 11.1. Correo de Confirmación con Datos de Contraloría
+- Se actualizó la plantilla `plantilla_prueba` en la DB para incluir los datos de Contraloría (Contrato, Puesto, Salario, Ubicación, Fechas).
+- Se actualizó `PlaceholderResolver` para soportar los nuevos placeholders.
+- Se actualizó `EmailDispatcher` para pasar los datos de la cita completa (leída de la DB) al correo.
+
+### 11.2. Correo de Reagenda Premium
+- Se actualizó la plantilla `plantilla_reagenda` con el diseño unificado.
+- El correo ahora incluye el **motivo**, la **nueva fecha** y la **nueva hora**.
+- Se actualizó el `EmailDispatcher` para pasar el motivo y la nueva fecha correctamente.
+
+### 11.3. Polling en Reenvío de Correos (Pestaña Datos)
+- El botón de "Reenviar" en la pestaña Datos ahora usa **Polling** (cada 2 segundos) para esperar a que el worker envíe el correo.
+- El botón muestra "Enviando..." y cambia a "¡Enviado!" en verde cuando el worker termina.
+
+### 11.4. Selector de Horarios en Reagendar
+- El modal de reagendar ahora muestra un **selector de horarios** (chips) con los bloques disponibles (9:00 a 16:00).
+- Los horarios se cargan dinámicamente según el día seleccionado y la configuración de agenda (intervalo y máximo de citas).
+- Si no hay horarios, muestra un mensaje en rojo.
+
+### 11.5. Alertas de Citas Vencidas
+- Se agregó un banner rojo en el Dashboard cuando hay citas vencidas.
+- Se agregó el método `watchVencidas` en `CitasRepository` para consultar las citas vencidas en tiempo real.
+
+### 11.6. Migración de Base de Datos a v4
+- Se agregaron las columnas `numero_contrato`, `puesto`, `salario`, `ubicacion`, `ubicacion_especifica`, `fecha_inicio`, `fecha_fin` a la tabla `citas`.
+- Se actualizó `schemaVersion` a 4 y se agregaron los `ALTER TABLE` en el `onUpgrade`.
+
+---
+
+FIN DE LA ACTUALIZACIÓN

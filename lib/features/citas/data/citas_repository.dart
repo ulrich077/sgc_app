@@ -148,40 +148,8 @@ class CitasRepository {
 
     // Obtener la cita completa desde la DB para tener todos los datos
     final citaCompleta = await porId(id);
-    final cita = citaCompleta ?? Cita(
-      id: id,
-      uuidPublico: '',
-      personaNombre: personaNombre,
-      personaCorreo: personaCorreo,
-      personaDpi: personaDpi,
-      personaTelefono: null,
-      fechaHoraFirma: fechaHoraFirma.millisecondsSinceEpoch ~/ 1000,
-      estado: CitaEstado.citaCreada.dbValue,
-      tokenConfirmacion: token,
-      tokenExpira: null,
-      confirmadoRecibidoAt: null,
-      reagendadaVeces: 0,
-      motivoUltimaReagenda: null,
-      categoriaMotivoReagenda: null,
-      postMortemPresentado: false,
-      contraloriaPresentada: false,
-      probidadAperturadaAt: null,
-      notas: null,
-      creadaPor: 1,
-      userCreation: null,
-      dateCreation: null,
-      userUpdated: null,
-      dateUpdated: null,
-      isDelete: false,
-      // Aseguramos que los campos nuevos se pasen si es la primera vez
-      numeroContrato: null,
-      puesto: null,
-      salario: null,
-      ubicacion: null,
-      ubicacionEspecifica: null,
-      fechaInicio: null,
-      fechaFin: null,
-    );
+    if (citaCompleta == null) return;
+    final cita = citaCompleta;
 
     final cuerpo = EmailDispatcher.resolverPlantilla(
       plantilla: plantilla,

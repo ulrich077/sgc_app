@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
@@ -20,7 +23,8 @@ class DatosTab extends ConsumerStatefulWidget {
 }
 
 class _DatosTabState extends ConsumerState<DatosTab> {
-  bool _loadingReenvio = false;
+  bool _enviando = false;
+  bool _enviado = false;
 
   Future<void> _editarCorreo() async {
     final ctrl = TextEditingController(text: widget.cita.personaCorreo);
@@ -74,15 +78,58 @@ class _DatosTabState extends ConsumerState<DatosTab> {
   }
 
   Future<void> _reenviarCorreo() async {
-    setState(() => _loadingReenvio = true);
+    setState(() {
+      _enviando = true;
+      _enviado = false;
+    });
+
     try {
-      final repo = CitasRepository(ref.read(databaseProvider));
+      final db = ref.read(databaseProvider);
+      final repo = CitasRepository(db);
+      
+      // 1. Encolar el correo de prueba
       await repo.reenviarCorreoPrueba(widget.cita.id);
-      if (mounted) AppDialogs.success(context, 'Correo de prueba encolado para reenvío.');
+
+      // 2. Polling para esperar a que el worker lo envíe
+      bool enviado = false;
+      int intentos = 0;
+      
+      while (!enviado && intentos < 15) { // 15 * 2s = 30s máx
+        await Future.delayed(const Duration(seconds: 2));
+        
+        final correo = await (db.select(db.correosLog)
+              ..where((t) => t.citaId.equals(widget.cita.id) & t.tipo.equals('prueba'))
+              ..orderBy([(t) => OrderingTerm.desc(t.id)])..limit(1))
+            .getSingleOrNull();
+            
+        if (correo != null && correo.estado == 'enviado') {
+          enviado = true;
+          if (mounted) {
+            setState(() {
+              _enviando = false;
+              _enviado = true;
+            });
+            AppDialogs.success(context, '¡Correo enviado exitosamente!');
+            
+            // Regresar el botón a la normalidad después de 3 segundos
+            Future.delayed(const Duration(seconds: 3), () {
+              if (mounted) setState(() => _enviado = false);
+            });
+          }
+        }
+        intentos++;
+      }
+      
+      if (!enviado && mounted) {
+        setState(() => _enviando = false);
+        AppDialogs.info(context, 'El correo está en cola. Revisa la pestaña de Ajustes > Cola de Correos para más detalles.');
+      }
+
     } catch (e) {
-      if (mounted) AppDialogs.error(context, 'Error al reenviar: $e');
-    } finally {
-      if (mounted) setState(() => _loadingReenvio = false);
+      if (mounted) {
+        setState(() => _enviando = false);
+        AppDialogs.error(context, 'Error al reenviar: $e');
+      }
     }
   }
 
@@ -92,7 +139,7 @@ class _DatosTabState extends ConsumerState<DatosTab> {
     final fecha = DateTime.fromMillisecondsSinceEpoch(widget.cita.fechaHoraFirma * 1000);
 
     return Container(
-      color: const Color(0xFFF4F7F9), // Fondo gris suave para unificar con Acciones
+      color: const Color(0xFFF4F7F9),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSizes.xl),
         child: Center(
@@ -103,7 +150,7 @@ class _DatosTabState extends ConsumerState<DatosTab> {
               children: [
                 _PremiumCard(
                   title: 'Información Personal',
-                  icon: Icons.person_outline,
+                  icon: FontAwesomeIcons.user,
                   children: [
                     _InfoRow(label: 'Nombre Completo', value: widget.cita.personaNombre),
                     _InfoRow(label: 'Documento (DPI)', value: widget.cita.personaDpi ?? '—'),
@@ -114,7 +161,7 @@ class _DatosTabState extends ConsumerState<DatosTab> {
 
                 _PremiumCard(
                   title: 'Contacto y Cita',
-                  icon: Icons.event_outlined,
+                  icon: FontAwesomeIcons.calendarCheck,
                   children: [
                     Row(
                       children: [
@@ -124,7 +171,7 @@ class _DatosTabState extends ConsumerState<DatosTab> {
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             visualDensity: VisualDensity.compact,
                           ),
-                          icon: const Icon(Icons.edit, size: 16),
+                          icon: const FaIcon(FontAwesomeIcons.penToSquare, size: 14),
                           label: const Text('Editar'),
                           onPressed: _editarCorreo,
                         ),
@@ -133,12 +180,20 @@ class _DatosTabState extends ConsumerState<DatosTab> {
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                             visualDensity: VisualDensity.compact,
+                            side: _enviado ? const BorderSide(color: Colors.green) : null,
                           ),
-                          icon: _loadingReenvio
+                          icon: _enviando
                               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Icon(Icons.send, size: 16),
-                          label: Text(_loadingReenvio ? 'Enviando' : 'Reenviar'),
-                          onPressed: _loadingReenvio ? null : _reenviarCorreo,
+                              : FaIcon(
+                                  _enviado ? FontAwesomeIcons.circleCheck : FontAwesomeIcons.paperPlane,
+                                  size: 14,
+                                  color: _enviado ? Colors.green : null,
+                                ),
+                          label: Text(
+                            _enviando ? 'Enviando...' : _enviado ? '¡Enviado!' : 'Reenviar',
+                            style: TextStyle(color: _enviado ? Colors.green : null),
+                          ),
+                          onPressed: (_enviando || _enviado) ? null : _reenviarCorreo,
                         ),
                       ],
                     ),
@@ -151,7 +206,7 @@ class _DatosTabState extends ConsumerState<DatosTab> {
                 if (widget.cita.notas != null && widget.cita.notas!.isNotEmpty)
                   _PremiumCard(
                     title: 'Notas Adicionales',
-                    icon: Icons.notes,
+                    icon: FontAwesomeIcons.penToSquare,
                     children: [
                       Text(widget.cita.notas!, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14)),
                     ],
@@ -165,10 +220,9 @@ class _DatosTabState extends ConsumerState<DatosTab> {
   }
 }
 
-// TARJETA PREMIUM UNIFICADA
 class _PremiumCard extends StatelessWidget {
   final String title;
-  final IconData icon;
+  final FaIconData icon;
   final List<Widget> children;
 
   const _PremiumCard({required this.title, required this.icon, required this.children});
@@ -189,7 +243,7 @@ class _PremiumCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: AppColors.primary, size: 24),
+              FaIcon(icon, color: AppColors.primary, size: 18),
               const SizedBox(width: 12),
               Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textPrimary)),
             ],
@@ -202,7 +256,6 @@ class _PremiumCard extends StatelessWidget {
   }
 }
 
-// FILA DE INFORMACIÓN
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
