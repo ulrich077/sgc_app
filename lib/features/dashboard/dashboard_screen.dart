@@ -109,6 +109,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const SizedBox(height: AppSizes.xl),
 
+            // ALERTA DE CITAS VENCIDAS
+            StreamBuilder<int>(
+              stream: repo.watchVencidas(),
+              builder: (context, snapshot) {
+                final count = snapshot.data ?? 0;
+                if (count == 0) return const SizedBox.shrink();
+                return Container(
+                  margin: const EdgeInsets.only(bottom: AppSizes.lg),
+                  padding: const EdgeInsets.all(AppSizes.md),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, color: Colors.red),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Atención: Hay $count cita(s) vencida(s) que requieren reagendamiento o cancelación.',
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+
             // CONTENIDO PRINCIPAL
             LayoutBuilder(
               builder: (context, constraints) {

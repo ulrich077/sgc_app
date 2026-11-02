@@ -329,6 +329,21 @@ class CitasRepository {
     );
   }
 
+
+
+  Stream<int> watchVencidas() {
+    final ahoraSegundos = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    return (_db.select(_db.citas)
+          ..where((t) => 
+              t.fechaHoraFirma.isSmallerThanValue(ahoraSegundos) &
+              t.isDelete.equals(false) &
+              t.estado.equals(CitaEstado.cerrada.dbValue).not() &
+              t.estado.equals(CitaEstado.cancelada.dbValue).not() &
+              t.estado.equals(CitaEstado.vencida.dbValue).not()))
+        .watch()
+        .map((r) => r.length);
+  }
+
   Stream<int> watchTotalPorEstado(CitaEstado estado) {
     return (_db.select(_db.citas)..where((t) => t.estado.equals(estado.dbValue) & t.isDelete.equals(false))).watch().map((r) => r.length);
   }
@@ -372,6 +387,11 @@ class CitasRepository {
   }) {
     final q = _db.select(_db.citas)..where((t) => t.isDelete.equals(false));
 
+    // Filtro para ocultar cerradas y canceladas
+    q.where((t) => 
+        t.estado.equals(CitaEstado.cerrada.dbValue).not() & 
+        t.estado.equals(CitaEstado.cancelada.dbValue).not());
+
     if (estadoFiltro != null) {
       q.where((t) => t.estado.equals(estadoFiltro.dbValue));
     }
@@ -396,6 +416,7 @@ class CitasRepository {
     }
 
     q.limit(pageSize, offset: page * pageSize);
+
     return q.watch().map((rows) => CitasPage(rows: rows, totalFiltered: rows.length));
   }
 }
