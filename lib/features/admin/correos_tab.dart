@@ -1,14 +1,11 @@
-import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_sizes.dart';
-import '../../core/providers/database_provider.dart';
 import '../../core/utils/dialogs.dart';
 import '../../data/database/app_database.dart';
 import '../correos/data/correos_repository.dart';
-import '../correos/domain/correo_tipo.dart';
 
 class CorreosTab extends ConsumerWidget {
   const CorreosTab({super.key});
@@ -16,110 +13,161 @@ class CorreosTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(correosRepositoryProvider);
-    final dateFmt = DateFormat('dd/MM HH:mm');
+    final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
-    return ListView(
-      padding: const EdgeInsets.all(AppSizes.pagePadding),
-      children: [
-        Text('Cola de correos', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: AppSizes.sm),
-        const Text(
-          'Los correos pendientes se envían automáticamente. '
-          'Los fallidos se reintentan hasta 6 veces con backoff.',
-          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: AppSizes.md),
-        StreamBuilder<List<CorreosLogData>>(
-          stream: repo.watchTodos(),
-          builder: (context, snap) {
-            if (!snap.hasData) {
-              return const Padding(
-                padding: EdgeInsets.all(AppSizes.xl),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final correos = snap.data!;
-            if (correos.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.all(AppSizes.xl),
-                child: Center(child: Text('Sin correos en la cola.')),
-              );
-            }
+    return StreamBuilder<List<CorreosLogData>>(
+      stream: repo.watchTodos(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final correos = snapshot.data!;
+        if (correos.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.mark_email_read, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No hay correos en la cola', style: TextStyle(color: Colors.grey, fontSize: 16)),
+              ],
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.all(AppSizes.xl),
+          itemCount: correos.length,
+          separatorBuilder: (_, index) => const SizedBox(height: AppSizes.md),
+          itemBuilder: (context, index) {
+            final correo = correos[index];
+            final isEnviado = correo.estado == 'enviado';
+            final isFallido = correo.estado == 'fallido';
+            final isPendiente = correo.estado == 'pendiente';
+
+            Color statusColor = Colors.grey;
+            IconData statusIcon = Icons.schedule;
+            if (isEnviado) { statusColor = Colors.green; statusIcon = Icons.check_circle; }
+            if (isFallido) { statusColor = Colors.red; statusIcon = Icons.error; }
+            if (isPendiente) { statusColor = Colors.orange; statusIcon = Icons.hourglass_empty; }
+
             return Card(
               elevation: 0,
-              color: Colors.transparent,
-              child: Column(
-                children: correos.map((c) {
-                  final tipo = CorreoTipo.fromDb(c.tipo);
-                  final estado = CorreoEstado.fromDb(c.estado);
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: AppSizes.sm),
-                    child: ListTile(
-                      leading: _estadoIcon(estado),
-                      title: Text(c.asunto),
-                      subtitle: Column(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: Theme(
+                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(statusIcon, color: statusColor, size: 20),
+                  ),
+                  title: Text(
+                    correo.asunto,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        Text('Para: ${correo.destinatario}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        const Spacer(),
+                        Text(dateFmt.format(DateTime.fromMillisecondsSinceEpoch(correo.programadoAt)), style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  children: [
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${tipo.label} → ${c.destinatario}'),
-                          if (c.errorMensaje != null)
-                            Text(
-                              'Error: ${c.errorMensaje}',
-                              style: const TextStyle(color: AppColors.danger, fontSize: 11),
+                          _InfoRow(label: 'Tipo de correo', value: correo.tipo),
+                          _InfoRow(label: 'Estado actual', value: correo.estado.toUpperCase(), color: statusColor),
+                          _InfoRow(label: 'Intentos de envío', value: '${correo.intentos}'),
+                          if (correo.enviadoAt != null)
+                            _InfoRow(label: 'Enviado el', value: dateFmt.format(DateTime.fromMillisecondsSinceEpoch(correo.enviadoAt!))),
+                          if (correo.errorMensaje != null && correo.errorMensaje!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('Último error:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.red)),
+                                  const SizedBox(height: 4),
+                                  Text(correo.errorMensaje!, style: TextStyle(fontSize: 12, color: Colors.red.shade800)),
+                                ],
+                              ),
                             ),
-                          Text(
-                            'Programado: ${dateFmt.format(DateTime.fromMillisecondsSinceEpoch(c.programadoAt))}'
-                            '${c.intentos > 0 ? ' — intentos: ${c.intentos}' : ''}',
-                            style: const TextStyle(fontSize: 11),
-                          ),
+                          ],
+                          const SizedBox(height: AppSizes.md),
+                          if (isFallido)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: FilledButton.icon(
+                                style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                                icon: const Icon(Icons.refresh, size: 16),
+                                label: const Text('Reintentar envío'),
+                                onPressed: () async {
+                                  await repo.reintentar(correo.id);
+                                  if (context.mounted) AppDialogs.success(context, 'Correo re-encolado. Se enviará en breve.');
+                                },
+                              ),
+                            ),
                         ],
                       ),
-                      trailing: estado == CorreoEstado.fallido || estado == CorreoEstado.pendiente
-                          ? IconButton(
-                              icon: const Icon(Icons.refresh),
-                              tooltip: 'Reintentar',
-                              onPressed: () => _reintentar(context, ref, c.id),
-                            )
-                          : null,
                     ),
-                  );
-                }).toList(),
+                  ],
+                ),
               ),
             );
           },
-        ),
-      ],
+        );
+      },
     );
   }
+}
 
-  Widget _estadoIcon(CorreoEstado e) {
-    switch (e) {
-      case CorreoEstado.enviado:
-        return const Icon(Icons.check_circle, color: AppColors.success);
-      case CorreoEstado.pendiente:
-        return const Icon(Icons.schedule, color: AppColors.pendiente);
-      case CorreoEstado.fallido:
-        return const Icon(Icons.error, color: AppColors.danger);
-    }
-  }
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
 
-  Future<void> _reintentar(BuildContext context, WidgetRef ref, int id) async {
-    final ok = await AppDialogs.confirm(context, '¿Reintentar el envío de este correo ahora?');
-    if (!ok || !context.mounted) return;
-    try {
-      final db = ref.read(databaseProvider);
-      await (db.update(db.correosLog)..where((t) => t.id.equals(id))).write(
-        CorreosLogCompanion(
-          estado: const Value('pendiente'),
-          intentos: const Value(0),
-          proximoIntentoAt: Value(DateTime.now().millisecondsSinceEpoch),
-          errorMensaje: const Value(null),
-        ),
-      );
-      if (!context.mounted) return;
-      await AppDialogs.success(context, 'Correo marcado para reintento.');
-    } catch (e) {
-      if (!context.mounted) return;
-      await AppDialogs.error(context, 'Error: $e');
-    }
+  const _InfoRow({required this.label, required this.value, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          ),
+          Expanded(
+            child: Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color ?? AppColors.textPrimary)),
+          ),
+        ],
+      ),
+    );
   }
 }

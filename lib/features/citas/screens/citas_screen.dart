@@ -214,7 +214,7 @@ class _CitasTable extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
       child: Container(
-        width: double.infinity, // 100% width
+        width: double.infinity, // 100% WIDTH
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(AppSizes.md),
@@ -259,6 +259,13 @@ class _CitasTable extends StatelessWidget {
                     ],
                     rows: page.rows.map((cita) {
                       final estado = CitaEstado.fromDb(cita.estado);
+                      
+                      // REGLA VI: Los segundos se multiplican por 1000
+                      final fechaFirma = DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma * 1000);
+                      final fechaCreada = cita.dateCreation == null 
+                          ? null 
+                          : DateTime.fromMillisecondsSinceEpoch(cita.dateCreation! * 1000);
+
                       return DataRow(
                         onSelectChanged: (_) => CitaDetalleModal.show(context, cita.id),
                         cells: [
@@ -266,9 +273,9 @@ class _CitasTable extends StatelessWidget {
                           DataCell(Text(cita.personaDpi ?? '—')),
                           DataCell(Text(cita.personaCorreo)),
                           DataCell(Text(cita.personaTelefono ?? '—')),
-                          DataCell(Text(dateFmt.format(DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma)))),
+                          DataCell(Text(dateFmt.format(fechaFirma))),
                           DataCell(_EstadoBadge(estado: estado)),
-                          DataCell(Text(cita.dateCreation == null ? '—' : dateFmt.format(DateTime.fromMillisecondsSinceEpoch(cita.dateCreation!)))),
+                          DataCell(Text(fechaCreada == null ? '—' : dateFmt.format(fechaCreada))),
                         ],
                       );
                     }).toList(),

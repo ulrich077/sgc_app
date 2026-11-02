@@ -9,7 +9,6 @@ class CorreosRepository {
   final AppDatabase _db;
   CorreosRepository(this._db);
 
-  /// Encola un correo. Si no hay pendientes, lo marca para envío inmediato.
   Future<int> encolar({
     int? citaId,
     required CorreoTipo tipo,
@@ -32,8 +31,7 @@ class CorreosRepository {
           cc: Value(cc),
           asunto: asunto,
           cuerpoHtml: Value(cuerpoHtml),
-          adjuntosJson:
-              Value(adjuntos == null ? null : jsonEncode(adjuntos)),
+          adjuntosJson: Value(adjuntos == null ? null : jsonEncode(adjuntos)),
           estado: const Value('pendiente'),
           programadoAt: ahora,
           proximoIntentoAt: Value(hayCola ? null : ahora),
@@ -43,8 +41,7 @@ class CorreosRepository {
   Stream<List<CorreosLogData>> watchTodos() {
     return (_db.select(_db.correosLog)
           ..orderBy([
-            (t) => OrderingTerm(
-                expression: t.programadoAt, mode: OrderingMode.desc)
+            (t) => OrderingTerm(expression: t.programadoAt, mode: OrderingMode.desc)
           ]))
         .watch();
   }
@@ -53,10 +50,20 @@ class CorreosRepository {
     return (_db.select(_db.correosLog)
           ..where((t) => t.estado.equals('pendiente'))
           ..orderBy([
-            (t) => OrderingTerm(
-                expression: t.programadoAt, mode: OrderingMode.asc)
+            (t) => OrderingTerm(expression: t.programadoAt, mode: OrderingMode.asc)
           ]))
         .watch();
+  }
+
+  Future<void> reintentar(int id) async {
+    await (_db.update(_db.correosLog)..where((t) => t.id.equals(id))).write(
+      CorreosLogCompanion(
+        estado: const Value('pendiente'),
+        intentos: const Value(0),
+        proximoIntentoAt: Value(DateTime.now().millisecondsSinceEpoch),
+        errorMensaje: const Value(null),
+      ),
+    );
   }
 
   Future<void> marcarEnviado(int id) async {
@@ -65,6 +72,7 @@ class CorreosRepository {
         estado: const Value('enviado'),
         enviadoAt: Value(DateTime.now().millisecondsSinceEpoch),
         intentos: const Value(0),
+        errorMensaje: const Value(null),
       ),
     );
   }
@@ -76,26 +84,19 @@ class CorreosRepository {
         estado: Value(intentos >= 6 ? 'fallido' : 'pendiente'),
         errorMensaje: Value(error),
         intentos: Value(intentos),
-        proximoIntentoAt: Value(
-            DateTime.now().add(backoff).millisecondsSinceEpoch),
+        proximoIntentoAt: Value(DateTime.now().add(backoff).millisecondsSinceEpoch),
       ),
     );
   }
 
   Duration _backoff(int intentos) {
     switch (intentos) {
-      case 1:
-        return const Duration(minutes: 1);
-      case 2:
-        return const Duration(minutes: 5);
-      case 3:
-        return const Duration(minutes: 15);
-      case 4:
-        return const Duration(hours: 1);
-      case 5:
-        return const Duration(hours: 6);
-      default:
-        return const Duration(hours: 24);
+      case 1: return const Duration(minutes: 1);
+      case 2: return const Duration(minutes: 5);
+      case 3: return const Duration(minutes: 15);
+      case 4: return const Duration(hours: 1);
+      case 5: return const Duration(hours: 6);
+      default: return const Duration(hours: 24);
     }
   }
 }

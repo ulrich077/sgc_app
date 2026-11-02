@@ -35,7 +35,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     setState(() => _loadingDia = true);
     final repo = ref.read(citasRepositoryProvider);
     
-    // Buscamos las citas de ese día (desde las 00:00 hasta las 23:59)
     final inicio = DateTime(dia.year, dia.month, dia.day, 0, 0, 0);
     final fin = DateTime(dia.year, dia.month, dia.day, 23, 59, 59);
     
@@ -49,7 +48,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _abrirNuevaCitaEnFecha(DateTime fecha) async {
-    // Abre el modal de nueva cita y le pasa la fecha seleccionada (si tu modal lo permite)
     final creada = await showDialog<bool>(
       context: context,
       builder: (_) => const NuevaCitaDialog(),
@@ -84,7 +82,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      DateFormat('EEEE, d de MMMM de yyyy', 'es').format(DateTime.now()),
+                      DateFormat.yMMMMEEEEd('es').format(DateTime.now()),
                       style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
                     ),
                   ],
@@ -97,7 +95,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const SizedBox(height: AppSizes.xl),
 
-            // CONTENIDO: CALENDARIO + PANEL DEL DÍA
+            // KPIs
+            Row(
+              children: [
+                _KpiMini(label: 'Por firmar', value: repo.watchTotalPorEstado(CitaEstado.citaCreada), color: AppColors.primary),
+                const SizedBox(width: AppSizes.md),
+                _KpiMini(label: 'Pendientes', value: repo.watchTotalPorEstado(CitaEstado.pendienteEnvioContrato), color: Colors.orange),
+                const SizedBox(width: AppSizes.md),
+                _KpiMini(label: 'Enviadas', value: repo.watchTotalPorEstado(CitaEstado.contratoEnviado), color: Colors.green),
+                const SizedBox(width: AppSizes.md),
+                _KpiMini(label: 'Cerradas', value: repo.watchTotalPorEstado(CitaEstado.cerrada), color: Colors.teal),
+              ],
+            ),
+            const SizedBox(height: AppSizes.xl),
+
+            // CONTENIDO PRINCIPAL
             LayoutBuilder(
               builder: (context, constraints) {
                 final isDesktop = constraints.maxWidth > 900;
@@ -161,7 +173,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 calendarFormat: CalendarFormat.month,
                 locale: 'es_ES',
                 availableGestures: AvailableGestures.horizontalSwipe,
-                // ESTO PINTA LOS PUNTITOS EN LOS DÍAS CON CITAS
                 eventLoader: (day) {
                   return todasLasCitas.where((cita) {
                     final fecha = DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma * 1000);
@@ -204,7 +215,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final fechaStr = DateFormat('EEEE, d de MMMM', 'es').format(_selectedDay!);
+    final fechaStr = DateFormat.yMMMMEEEEd('es').format(_selectedDay!);
     
     return Container(
       padding: const EdgeInsets.all(AppSizes.xl),
@@ -262,11 +273,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       'No hay citas agendadas para este día.',
                       style: TextStyle(color: Colors.grey.shade500, fontSize: 15),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '¡Tienes el día libre para agendar!',
-                      style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                    ),
                   ],
                 ),
               ),
@@ -281,60 +287,119 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 final cita = _citasDelDia[index];
                 final estado = CitaEstado.fromDb(cita.estado);
                 final hora = DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma * 1000);
+                final esCancelada = estado == CitaEstado.cancelada;
 
-                return Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: Column(
-                          children: [
-                            Text(DateFormat('HH:mm').format(hora), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            Text('hrs', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
-                          ],
-                        ),
+                return InkWell(
+                  onTap: () => CitaDetalleModal.show(context, cita.id),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: esCancelada ? Colors.red.withValues(alpha: 0.02) : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: esCancelada ? Colors.red.withValues(alpha: 0.2) : Colors.grey.shade200,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(cita.personaNombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 8, height: 8,
-                                  decoration: BoxDecoration(color: estado.color, shape: BoxShape.circle),
+                    ),
+                    child: Row(
+                      children: [
+                        // Hora
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: esCancelada ? Colors.red.shade200 : Colors.grey.shade300),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                DateFormat('HH:mm').format(hora), 
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold, 
+                                  fontSize: 16,
+                                  color: esCancelada ? Colors.red : AppColors.textPrimary,
+                                  decoration: esCancelada ? TextDecoration.lineThrough : null,
                                 ),
-                                const SizedBox(width: 6),
-                                Text(estado.label, style: TextStyle(fontSize: 12, color: estado.color, fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                          ],
+                              ),
+                              Text('hrs', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textSecondary),
-                        onPressed: () => CitaDetalleModal.show(context, cita.id),
-                      ),
-                    ],
+                        const SizedBox(width: 16),
+                        // Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                cita.personaNombre, 
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold, 
+                                  fontSize: 15,
+                                  color: esCancelada ? Colors.grey.shade500 : AppColors.textPrimary,
+                                  decoration: esCancelada ? TextDecoration.lineThrough : null,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8, height: 8,
+                                    decoration: BoxDecoration(color: estado.color, shape: BoxShape.circle),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(estado.label, style: TextStyle(fontSize: 12, color: estado.color, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Flecha indicativa
+                        const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textSecondary),
+                      ],
+                    ),
                   ),
                 );
               },
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _KpiMini extends StatelessWidget {
+  final String label;
+  final Stream<int> value;
+  final Color color;
+
+  const _KpiMini({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            StreamBuilder<int>(
+              stream: value,
+              builder: (context, snap) {
+                if (!snap.hasData) return const SizedBox(height: 28);
+                return Text('${snap.data}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color));
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/auth/auth_provider.dart';
@@ -13,12 +15,73 @@ import '../data/citas_repository.dart';
 import '../domain/cita_estado.dart';
 import 'drop_zone.dart';
 
-class AccionesTab extends ConsumerWidget {
+class AccionesTab extends ConsumerStatefulWidget {
   final Cita cita;
   const AccionesTab({super.key, required this.cita});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AccionesTab> createState() => _AccionesTabState();
+}
+
+class _AccionesTabState extends ConsumerState<AccionesTab> {
+  bool _enviandoFinal = false;
+  bool _finalEnviado = false;
+  StreamSubscription? _subFinal;
+
+  @override
+  void dispose() {
+    _subFinal?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _enviarCorreoFinal() async {
+    setState(() {
+      _enviandoFinal = true;
+      _finalEnviado = false;
+    });
+
+    try {
+      final db = ref.read(databaseProvider);
+      final auth = ref.read(authProvider);
+      final repo = CitasRepository(db);
+      
+      // 1. Cambiamos el estado (esto encola el correo final automáticamente en el repo)
+      await repo.cambiarEstado(
+        citaId: widget.cita.id,
+        nuevoEstado: CitaEstado.contratoEnviado,
+        userId: auth.userId ?? 1,
+      );
+
+      // 2. Escuchamos la tabla de correos para saber cuándo se envía
+      _subFinal?.cancel();
+      _subFinal = (db.select(db.correosLog)
+            ..where((t) => t.citaId.equals(widget.cita.id) & t.tipo.equals('final_'))
+            ..orderBy([(t) => OrderingTerm.desc(t.id)])
+            ..limit(1))
+          .watchSingleOrNull()
+          .listen((correo) {
+        if (correo != null && correo.estado == 'enviado') {
+          if (mounted) {
+            setState(() {
+              _enviandoFinal = false;
+              _finalEnviado = true;
+            });
+            AppDialogs.success(context, '¡Contrato y Documentos enviados exitosamente!');
+          }
+        }
+      });
+
+    } catch (e) {
+      if (mounted) {
+        setState(() => _enviandoFinal = false);
+        AppDialogs.error(context, 'Error al enviar: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cita = widget.cita;
     final estado = CitaEstado.fromDb(cita.estado);
     final auth = ref.watch(authProvider);
     final docsRepo = ref.watch(documentosRepositoryProvider);
@@ -149,17 +212,21 @@ class AccionesTab extends ConsumerWidget {
                         alignment: Alignment.centerLeft,
                         child: FilledButton.icon(
                           style: FilledButton.styleFrom(
-                            backgroundColor: AppColors.primary,
+                            backgroundColor: _finalEnviado ? Colors.green : AppColors.primary,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                           ),
-                          icon: const Icon(Icons.send),
-                          label: const Text('Enviar Correo con Contrato'),
-                          onPressed: () async {
-                            final repo = CitasRepository(ref.read(databaseProvider));
-                            await repo.cambiarEstado(citaId: cita.id, nuevoEstado: CitaEstado.contratoEnviado, userId: auth.userId ?? 1);
-                            if (context.mounted) AppDialogs.success(context, 'Contrato enviado y proceso finalizado.');
-                          },
+                          icon: _enviandoFinal
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : Icon(_finalEnviado ? Icons.check_circle : Icons.send),
+                          label: Text(
+                            _enviandoFinal 
+                                ? 'Enviando correo...' 
+                                : _finalEnviado 
+                                    ? '¡Correo Enviado!' 
+                                    : 'Enviar Correo con Contrato'
+                          ),
+                          onPressed: (_enviandoFinal || _finalEnviado) ? null : _enviarCorreoFinal,
                         ),
                       ),
                 ),
@@ -216,7 +283,6 @@ class AccionesTab extends ConsumerWidget {
   }
 }
 
-// Switch personalizado para que se vea premium
 class _CustomSwitch extends StatelessWidget {
   final String title;
   final bool value;
@@ -252,7 +318,6 @@ class _CustomSwitch extends StatelessWidget {
   }
 }
 
-// Tarjeta de documento subido
 class _DocSubidoCard extends StatelessWidget {
   final String nombre;
   final IconData icon;
@@ -280,7 +345,6 @@ class _DocSubidoCard extends StatelessWidget {
   }
 }
 
-// Tarjeta de Acción genérica
 class _ActionCard extends StatelessWidget {
   final String title;
   final String subtitle;
