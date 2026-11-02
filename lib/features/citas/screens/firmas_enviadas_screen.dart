@@ -1,163 +1,135 @@
-import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
-import '../../../core/providers/database_provider.dart';
 import '../../../core/widgets/app_page_header.dart';
-import '../../../core/widgets/responsive.dart';
 import '../../../data/database/app_database.dart';
+import '../data/citas_repository.dart';
 import '../domain/cita_estado.dart';
+import '../widgets/cita_detalle_modal.dart';
 
-class FirmasEnviadasScreen extends ConsumerStatefulWidget {
+class FirmasEnviadasScreen extends ConsumerWidget {
   const FirmasEnviadasScreen({super.key});
 
   @override
-  ConsumerState<FirmasEnviadasScreen> createState() =>
-      _FirmasEnviadasScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.watch(citasRepositoryProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Firmas Enviadas'),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        foregroundColor: AppColors.textPrimary,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const AppPageHeader(
+            title: 'Firmas Enviadas',
+            subtitle: 'Citas con contrato enviado o cerradas.',
+          ),
+          Expanded(
+            child: StreamBuilder<List<Cita>>(
+              stream: repo.watchFirmasEnviadas(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final citas = snapshot.data!;
+                if (citas.isEmpty) {
+                  return const Center(child: Text('No hay firmas enviadas.'));
+                }
+
+                return _FirmasTable(citas: citas);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _FirmasEnviadasScreenState extends ConsumerState<FirmasEnviadasScreen> {
-  int? _sortColumnIndex;
-  bool _sortAscending = false;
+class _FirmasTable extends StatelessWidget {
+  final List<Cita> citas;
+  const _FirmasTable({required this.citas});
 
   @override
   Widget build(BuildContext context) {
-    final db = ref.watch(databaseProvider);
+    final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
 
-    final stream = (db.select(db.citas)
-          ..where((t) =>
-              (t.estado.equals(CitaEstado.contratoEnviado.dbValue) |
-                  t.estado.equals(CitaEstado.cerrada.dbValue)) &
-              t.isDelete.equals(false))
-          ..orderBy([
-            (t) =>
-                OrderingTerm(expression: t.fechaHoraFirma, mode: OrderingMode.desc)
-          ]))
-        .watch();
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Firmas enviadas')),
-      body: ListView(
-        children: [
-          const AppPageHeader(
-            title: 'Firmas enviadas',
-            subtitle: 'Citas con contrato enviado o cerradas',
-          ),
-          StreamBuilder<List<Cita>>(
-            stream: stream,
-            builder: (context, snap) {
-              if (!snap.hasData) {
-                return const Padding(
-                  padding: EdgeInsets.all(AppSizes.xl),
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final rows = snap.data!;
-              if (rows.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(AppSizes.xl),
-                  child: Center(child: Text('No hay firmas enviadas.')),
-                );
-              }
-              final dateFmt = DateFormat('dd/MM/yyyy HH:mm');
-              final isMobile = Responsive.isMobile(context);
-
-              final table = DataTable(
-                sortColumnIndex: _sortColumnIndex,
-                sortAscending: _sortAscending,
-                showCheckboxColumn: false,
-                columns: [
-                  DataColumn(
-                    label: const Text('Nombre'),
-                    onSort: (i, asc) => setState(() {
-                      _sortColumnIndex = i;
-                      _sortAscending = asc;
-                    }),
-                  ),
-                  const DataColumn(label: Text('Correo')),
-                  const DataColumn(label: Text('DPI')),
-                  const DataColumn(label: Text('Fecha firma')),
-                  const DataColumn(label: Text('Estado')),
-                ],
-                rows: rows.map((c) {
-                  final e = CitaEstado.fromDb(c.estado);
-                  return DataRow(
-                    onSelectChanged: (_) => _verDetalle(context, c),
-                    cells: [
-                      DataCell(Text(c.personaNombre)),
-                      DataCell(Text(c.personaCorreo)),
-                      DataCell(Text(c.personaDpi ?? '—')),
-                      DataCell(Text(dateFmt.format(
-                          DateTime.fromMillisecondsSinceEpoch(
-                              c.fechaHoraFirma)))),
-                      DataCell(_Badge(estado: e)),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppSizes.md),
+          border: Border.all(color: AppColors.border, width: 1),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+          ],
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final tableWidth = constraints.maxWidth;
+            return ConstrainedBox(
+              constraints: BoxConstraints(minWidth: tableWidth, maxHeight: 600),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    showCheckboxColumn: false,
+                    headingRowColor: WidgetStateProperty.all(AppColors.primary.withValues(alpha: 0.05)),
+                    columns: const [
+                      DataColumn(label: Text('Nombre')),
+                      DataColumn(label: Text('DPI')),
+                      DataColumn(label: Text('Correo')),
+                      DataColumn(label: Text('Fecha firma')),
+                      DataColumn(label: Text('Estado')),
                     ],
-                  );
-                }).toList(),
-              );
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSizes.pagePadding),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(AppSizes.md),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection:
-                        isMobile ? Axis.horizontal : Axis.vertical,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 900),
-                      child: table,
-                    ),
+                    rows: citas.map((cita) {
+                      final estado = CitaEstado.fromDb(cita.estado);
+                      final fecha = DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma * 1000);
+                      return DataRow(
+                        onSelectChanged: (_) => CitaDetalleModal.show(context, cita.id),
+                        cells: [
+                          DataCell(Text(cita.personaNombre, style: const TextStyle(fontWeight: FontWeight.w500))),
+                          DataCell(Text(cita.personaDpi ?? '—')),
+                          DataCell(Text(cita.personaCorreo)),
+                          DataCell(Text(dateFmt.format(fecha))),
+                          DataCell(_EstadoBadge(estado: estado)),
+                        ],
+                      );
+                    }).toList(),
                   ),
                 ),
-              );
-            },
-          ),
-          const SizedBox(height: AppSizes.xl),
-        ],
-      ),
-    );
-  }
-
-  void _verDetalle(BuildContext context, Cita c) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(c.personaNombre),
-        content: Text('Detalle — ${CitaEstado.fromDb(c.estado).label}'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cerrar'),
-          ),
-        ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 }
 
-class _Badge extends StatelessWidget {
+class _EstadoBadge extends StatelessWidget {
   final CitaEstado estado;
-  const _Badge({required this.estado});
+  const _EstadoBadge({required this.estado});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: AppSizes.sm, vertical: 4),
       decoration: BoxDecoration(
         color: estado.color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: estado.color),
+        borderRadius: BorderRadius.circular(AppSizes.sm),
+        border: Border.all(color: estado.color.withValues(alpha: 0.5)),
       ),
-      child: Text(estado.label,
-          style: TextStyle(
-              color: estado.color, fontSize: 12, fontWeight: FontWeight.w600)),
+      child: Text(estado.label, style: TextStyle(color: estado.color, fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }
 }

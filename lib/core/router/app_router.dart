@@ -40,7 +40,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (loc == '/login' || loc == '/splash') {
-        return auth.isAdmin ? '/admin-settings' : '/dashboard';
+        return '/dashboard';
       }
 
       final isAdminRoute = loc.startsWith('/admin-settings') ||

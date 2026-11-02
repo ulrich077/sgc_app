@@ -27,6 +27,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   // Lista de opciones del menú lateral de ajustes
   final List<Map<String, dynamic>> _menu = [
     {'title': 'Apariencia', 'icon': Icons.palette_outlined, 'type': 'colors'},
+    {'title': 'Modo Servidor', 'icon': Icons.dns_outlined, 'type': 'server'},
     {'title': 'Correo de Prueba', 'icon': Icons.mark_email_unread_outlined, 'type': 'template', 'clave': 'plantilla_prueba'},
     {'title': 'Correo de Reagenda', 'icon': Icons.calendar_today_outlined, 'type': 'template', 'clave': 'plantilla_reagenda'},
     {'title': 'Correo Final', 'icon': Icons.attachment_outlined, 'type': 'template', 'clave': 'plantilla_final'},
@@ -149,6 +150,7 @@ class _AdminSettingsScreenState extends ConsumerState<AdminSettingsScreen> {
   Widget _buildContent() {
     final item = _menu[_selectedIndex];
     if (item['type'] == 'colors') return const _ColorPanelWrapper();
+    if (item['type'] == 'server') return const _ServerModePanel();
     if (item['type'] == 'template') return _PlantillaEditor(clave: item['clave'], titulo: item['title']);
     if (item['type'] == 'smtp') return const SmtpConfigTab(); // Tu widget existente
     if (item['type'] == 'queue') return const CorreosTab(); // Tu widget existente
@@ -396,6 +398,107 @@ class _PlantillaEditorState extends ConsumerState<_PlantillaEditor> {
                 contentPadding: EdgeInsets.all(16),
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServerModePanel extends ConsumerStatefulWidget {
+  const _ServerModePanel();
+  @override
+  ConsumerState<_ServerModePanel> createState() => _ServerModePanelState();
+}
+
+class _ServerModePanelState extends ConsumerState<_ServerModePanel> {
+  bool _isServer = false;
+  bool _loading = true;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final db = ref.read(databaseProvider);
+    final row = await (db.select(db.configuracion)..where((t) => t.clave.equals('es_servidor'))).getSingleOrNull();
+    if (mounted) {
+      setState(() {
+        _isServer = row?.valor == 'true';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _save(bool value) async {
+    setState(() { _isServer = value; _saving = true; });
+    final db = ref.read(databaseProvider);
+    final existing = await (db.select(db.configuracion)..where((t) => t.clave.equals('es_servidor'))).getSingleOrNull();
+    
+    if (existing == null) {
+      await db.into(db.configuracion).insert(ConfiguracionCompanion.insert(clave: 'es_servidor', valor: Value(value.toString()), tipo: const Value('bool')));
+    } else {
+      await (db.update(db.configuracion)..where((t) => t.clave.equals('es_servidor'))).write(ConfiguracionCompanion(valor: Value(value.toString())));
+    }
+    
+    if (mounted) {
+      setState(() => _saving = false);
+      await AppDialogs.success(context, 'Modo de red actualizado a: ${value ? 'Servidor' : 'Cliente'}');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator());
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Configuración de Red', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        const SizedBox(height: AppSizes.sm),
+        const Text(
+          'Define si este equipo actuará como servidor central (base de datos y correos) o como cliente conectado a otro servidor.',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSizes.xl),
+        Container(
+          padding: const EdgeInsets.all(AppSizes.lg),
+          decoration: BoxDecoration(
+            color: _isServer ? AppColors.primary.withValues(alpha: 0.05) : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _isServer ? AppColors.primary.withValues(alpha: 0.3) : Colors.grey.shade300),
+          ),
+          child: Row(
+            children: [
+              Icon(_isServer ? Icons.dns : Icons.computer, color: _isServer ? AppColors.primary : Colors.grey, size: 32),
+              const SizedBox(width: AppSizes.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isServer ? 'Este equipo es el Servidor' : 'Este equipo es un Cliente',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isServer 
+                          ? 'Se encargará de la base de datos central y del envío de correos (SMTP).' 
+                          : 'Se conectará al servidor central para sincronizar los datos.',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _isServer,
+                onChanged: _saving ? null : _save,
+                activeThumbColor: AppColors.primary,
+              ),
+            ],
           ),
         ),
       ],

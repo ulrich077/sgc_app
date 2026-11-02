@@ -133,6 +133,7 @@ class _CitasScreenState extends ConsumerState<CitasScreen> {
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<CitaEstado?>(
+                    isExpanded: true,
                     initialValue: _query.estado,
                     decoration: InputDecoration(
                       labelText: 'Estado',
@@ -151,7 +152,7 @@ class _CitasScreenState extends ConsumerState<CitasScreen> {
                         child: Row(children: [
                           Container(width: 8, height: 8, decoration: BoxDecoration(color: e.color, shape: BoxShape.circle)),
                           const SizedBox(width: 8),
-                          Text(e.label),
+                          Expanded(child: Text(e.label, overflow: TextOverflow.ellipsis)),
                         ]),
                       )),
                     ],

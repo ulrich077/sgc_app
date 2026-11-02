@@ -3,18 +3,72 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/router/app_router.dart';
 import 'core/providers/theme_colors_provider.dart';
+import 'core/providers/database_provider.dart';
+import 'server/sgc_server.dart';
+import 'server/email_queue_worker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Inicializar los datos de idioma para el calendario y las fechas
   await initializeDateFormatting('es_ES', null);
 
   runApp(
     const ProviderScope(
-      child: SgcApp(),
+      child: ServerBootGate(),
     ),
   );
+}
+
+class ServerBootGate extends ConsumerStatefulWidget {
+  const ServerBootGate({super.key});
+
+  @override
+  ConsumerState<ServerBootGate> createState() => _ServerBootGateState();
+}
+
+class _ServerBootGateState extends ConsumerState<ServerBootGate> {
+  bool _booting = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    try {
+      final db = ref.read(databaseProvider);
+      final config = await (db.select(db.configuracion)..where((t) => t.clave.equals('es_servidor'))).getSingleOrNull();
+      
+      final isServer = config?.valor == 'true';
+
+      if (isServer) {
+        debugPrint('🚀 Iniciando SGC en modo SERVIDOR...');
+        final server = SgcServer(db);
+        await server.start(host: '0.0.0.0', port: 8080);
+        
+        // Iniciar el Worker de correos (Pasando solo la DB si es lo que espera)
+        EmailQueueWorker(db).start(intervalo: const Duration(seconds: 5));
+        debugPrint('✅ Servidor y Worker de correos iniciados.');
+      } else {
+        debugPrint('💻 Iniciando SGC en modo CLIENTE...');
+      }
+    } catch (e) {
+      debugPrint('❌ Error al iniciar el servidor: $e');
+    } finally {
+      if (mounted) setState(() => _booting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_booting) {
+      return const MaterialApp(
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
+    return const SgcApp();
+  }
 }
 
 class SgcApp extends ConsumerWidget {
@@ -23,16 +77,11 @@ class SgcApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeColorsAsync = ref.watch(themeColorsProvider);
-    // Aquí usamos el provider del router que ya tenías
-    final router = ref.watch(routerProvider); 
+    final router = ref.watch(routerProvider);
 
     return themeColorsAsync.when(
-      loading: () => const MaterialApp(
-        home: Scaffold(body: Center(child: CircularProgressIndicator())),
-      ),
-      error: (e, _) => MaterialApp(
-        home: Scaffold(body: Center(child: Text('Error: $e'))),
-      ),
+      loading: () => const MaterialApp(home: Scaffold(body: Center(child: CircularProgressIndicator()))),
+      error: (e, _) => MaterialApp(home: Scaffold(body: Center(child: Text('Error: $e')))),
       data: (colors) {
         return MaterialApp.router(
           title: 'SGC',

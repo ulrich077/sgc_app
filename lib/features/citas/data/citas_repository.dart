@@ -21,11 +21,9 @@ class CitasRepository {
     return (_db.select(_db.citas)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
 
-  // VALIDACIÓN DE DISPONIBILIDAD
   Future<bool> hayDisponibilidad(DateTime fechaHora) async {
     final cfgRows = await _db.select(_db.configuracion).get();
     final cfg = {for (final r in cfgRows) r.clave: r.valor};
-    
     final maxCitas = int.tryParse(cfg['max_citas_por_hora'] ?? '2') ?? 2;
     final intervalo = int.tryParse(cfg['intervalo_minutos'] ?? '30') ?? 30;
 
@@ -129,9 +127,7 @@ class CitasRepository {
   }) async {
     final servidorIp = cfg['servidor_ip'] ?? '';
     final puerto = cfg['servidor_puerto'] ?? '8080';
-    final enlace = servidorIp.isEmpty
-        ? ''
-        : 'http://$servidorIp:$puerto/api/confirmar/$token';
+    final enlace = servidorIp.isEmpty ? '' : 'http://$servidorIp:$puerto/api/confirmar/$token';
     final plantilla = cfg['plantilla_prueba'] ?? '';
     final empresa = cfg['empresa_nombre'] ?? 'SGC';
 
@@ -198,10 +194,7 @@ class CitasRepository {
 
   Future<void> actualizarCorreo(int citaId, String nuevoCorreo, int userId) async {
     if (_esClienteRemoto) {
-      await _api!.actualizarCita(citaId, {
-        'personaCorreo': nuevoCorreo,
-        'userUpdated': userId,
-      });
+      await _api!.actualizarCita(citaId, {'personaCorreo': nuevoCorreo, 'userUpdated': userId});
       return;
     }
     await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
@@ -219,10 +212,7 @@ class CitasRepository {
     required int userId,
   }) async {
     if (_esClienteRemoto) {
-      await _api!.actualizarCita(citaId, {
-        'estado': nuevoEstado.dbValue,
-        'userUpdated': userId,
-      });
+      await _api!.actualizarCita(citaId, {'estado': nuevoEstado.dbValue, 'userUpdated': userId});
       return;
     }
     await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
@@ -246,9 +236,7 @@ class CitasRepository {
     final cfgRows = await _db.select(_db.configuracion).get();
     final cfg = {for (final r in cfgRows) r.clave: r.valor};
 
-    final docs = await (_db.select(_db.documentos)
-          ..where((t) => t.citaId.equals(citaId) & t.isDelete.equals(false)))
-        .get();
+    final docs = await (_db.select(_db.documentos)..where((t) => t.citaId.equals(citaId) & t.isDelete.equals(false))).get();
     final adjuntos = <String>[];
     for (final d in docs) {
       if (d.tipo == 'contrato_firmado' || d.tipo == 'responsabilidad_firmado') {
@@ -258,11 +246,8 @@ class CitasRepository {
 
     final plantilla = cfg['plantilla_final'] ?? '';
     final empresa = cfg['empresa_nombre'] ?? 'SGC';
-    final cuerpo = EmailDispatcher.resolverPlantilla(
-      plantilla: plantilla,
-      cita: cita,
-      config: cfg.cast<String, String>(),
-    );
+    final cuerpo = EmailDispatcher.resolverPlantilla(plantilla: plantilla, cita: cita, config: cfg.cast<String, String>());
+    
     final repo = CorreosRepository(_db);
     await repo.encolar(
       citaId: citaId,
@@ -282,12 +267,8 @@ class CitasRepository {
     final cfg = {for (final r in cfgRows) r.clave: r.valor};
     final plantilla = cfg['plantilla_reagenda'] ?? '';
     final empresa = cfg['empresa_nombre'] ?? 'SGC';
-    final cuerpo = EmailDispatcher.resolverPlantilla(
-      plantilla: plantilla,
-      cita: cita,
-      config: cfg.cast<String, String>(),
-      motivo: cita.motivoUltimaReagenda,
-    );
+    final cuerpo = EmailDispatcher.resolverPlantilla(plantilla: plantilla, cita: cita, config: cfg.cast<String, String>(), motivo: cita.motivoUltimaReagenda);
+    
     final repo = CorreosRepository(_db);
     await repo.encolar(
       citaId: citaId,
@@ -319,26 +300,26 @@ class CitasRepository {
   }
 
   Stream<int> watchTotalPorEstado(CitaEstado estado) {
-    return (_db.select(_db.citas)
-          ..where((t) =>
-              t.estado.equals(estado.dbValue) & t.isDelete.equals(false)))
-        .watch()
-        .map((r) => r.length);
+    return (_db.select(_db.citas)..where((t) => t.estado.equals(estado.dbValue) & t.isDelete.equals(false))).watch().map((r) => r.length);
   }
 
   Stream<List<Cita>> watchRecientes({int limit = 10}) {
+    return (_db.select(_db.citas)..where((t) => t.isDelete.equals(false))..orderBy([(t) => OrderingTerm.desc(t.dateCreation)])..limit(limit)).watch();
+  }
+
+  Stream<List<Cita>> watchFirmasEnviadas() {
     return (_db.select(_db.citas)
-          ..where((t) => t.isDelete.equals(false))
-          ..orderBy([(t) => OrderingTerm.desc(t.dateCreation)])
-          ..limit(limit))
+          ..where((t) => 
+              (t.estado.equals(CitaEstado.contratoEnviado.dbValue) | 
+               t.estado.equals(CitaEstado.cerrada.dbValue)) &
+              t.isDelete.equals(false))
+          ..orderBy([(t) => OrderingTerm(expression: t.fechaHoraFirma, mode: OrderingMode.desc)]))
         .watch();
   }
 
-  // NUEVOS MÉTODOS PARA EL CALENDARIO
   Future<List<Cita>> obtenerCitasPorFecha(DateTime inicio, DateTime fin) async {
     final inicioSegundos = inicio.millisecondsSinceEpoch ~/ 1000;
     final finSegundos = fin.millisecondsSinceEpoch ~/ 1000;
-
     return await (_db.select(_db.citas)
           ..where((t) => 
               t.fechaHoraFirma.isBiggerOrEqualValue(inicioSegundos) &
@@ -348,9 +329,7 @@ class CitasRepository {
   }
 
   Stream<List<Cita>> watchTodas() {
-    return (_db.select(_db.citas)
-          ..where((t) => t.isDelete.equals(false)))
-        .watch();
+    return (_db.select(_db.citas)..where((t) => t.isDelete.equals(false))).watch();
   }
 
   Stream<CitasPage> watchPage({
@@ -387,7 +366,6 @@ class CitasRepository {
     }
 
     q.limit(pageSize, offset: page * pageSize);
-
     return q.watch().map((rows) => CitasPage(rows: rows, totalFiltered: rows.length));
   }
 }
