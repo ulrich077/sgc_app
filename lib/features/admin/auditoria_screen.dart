@@ -33,8 +33,7 @@ class AuditoriaScreen extends ConsumerWidget {
             subtitle: 'Registro inmutable de acciones del sistema',
           ),
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
+            padding: const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
             child: StreamBuilder<List<AuditoriaData>>(
               stream: repo.watchTodos(),
               builder: (context, snap) {
@@ -52,30 +51,32 @@ class AuditoriaScreen extends ConsumerWidget {
                   );
                 }
                 return Card(
+                  elevation: 0,
+                  color: Colors.transparent,
                   child: Column(
                     children: rows.map((a) {
-                      return ListTile(
-                        leading: _iconoAccion(a.accion),
-                        title: Text('${a.tabla} #${a.registroId ?? '—'}'),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Acción: ${a.accion}'),
-                            if (a.valorDespues != null)
-                              Text(
-                                'Después: ${a.valorDespues}',
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                        trailing: Text(
-                          dateFmt.format(DateTime.fromMillisecondsSinceEpoch(
-                              a.fecha)),
-                          style: const TextStyle(fontSize: 11),
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: AppSizes.sm),
+                        child: ListTile(
+                          leading: _iconoAccion(a.accion),
+                          title: Text('${a.tabla} #${a.registroId ?? '—'}'),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Acción: ${a.accion}'),
+                              if (a.valorDespues != null)
+                                Text(
+                                  'Después: ${a.valorDespues}',
+                                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                          trailing: Text(
+                            dateFmt.format(DateTime.fromMillisecondsSinceEpoch(a.fecha)),
+                            style: const TextStyle(fontSize: 11),
+                          ),
                         ),
                       );
                     }).toList(),

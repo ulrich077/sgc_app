@@ -59,6 +59,8 @@ dependencies:
   web_socket_channel: ^3.0.3
   http: ^1.6.0
   shelf_multipart: ^2.0.2
+  table_calendar: ^3.3.0
+  desktop_drop: ^0.8.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -35,9 +35,10 @@ class AppDialogs {
   static Future<void> _basic(BuildContext context, String title,
       String message, IconData icon, Color color) async {
     if (!context.mounted) return;
-    await showDialog<void>(
+    
+    return showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSizes.md),
         ),
@@ -49,7 +50,9 @@ class AppDialogs {
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            // Usamos el 'ctx' del builder, no el 'context' externo.
+            // Así el pop siempre cierra el diálogo correcto.
+            onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('OK'),
           ),
         ],
@@ -62,9 +65,10 @@ class AppDialogs {
       String confirmLabel = 'Sí',
       String cancelLabel = 'Cancelar'}) async {
     if (!context.mounted) return false;
+    
     final result = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppSizes.md),
         ),
@@ -72,11 +76,11 @@ class AppDialogs {
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(cancelLabel),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(confirmLabel),
           ),
         ],
@@ -92,6 +96,7 @@ class AppDialogs {
     required List<DialogOption<T>> options,
   }) async {
     if (!context.mounted) return null;
+    
     return showDialog<T>(
       context: context,
       builder: (ctx) => AlertDialog(

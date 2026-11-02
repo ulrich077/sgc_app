@@ -212,7 +212,7 @@ class _CitasTable extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSizes.pagePadding),
       child: Container(
-        width: double.infinity,
+        width: double.infinity, // 100% width
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(AppSizes.md),
@@ -227,7 +227,6 @@ class _CitasTable extends StatelessWidget {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Forzamos el 100% del ancho disponible
             final tableWidth = constraints.maxWidth;
 
             return ConstrainedBox(
@@ -240,7 +239,6 @@ class _CitasTable extends StatelessWidget {
                     sortColumnIndex: sortColumnIndex,
                     sortAscending: sortAscending,
                     showCheckboxColumn: false,
-                    // IMPORTANTE: Sin FixedColumnWidth para que se expanda al 100%
                     headingRowColor: WidgetStateProperty.all(AppColors.primary.withValues(alpha: 0.05)),
                     dataRowColor: WidgetStateProperty.resolveWith((states) {
                       if (states.contains(WidgetState.hovered)) {
@@ -249,13 +247,13 @@ class _CitasTable extends StatelessWidget {
                       return Colors.transparent;
                     }),
                     columns: [
-                      DataColumn(label: const Text('Nombre'), onSort: onSort),
+                      DataColumn(label: const Text('Nombre'), onSort: (columnIndex, ascending) => onSort(0, !sortAscending)),
                       const DataColumn(label: Text('DPI')),
                       const DataColumn(label: Text('Correo')),
                       const DataColumn(label: Text('Teléfono')),
-                      DataColumn(label: const Text('Fecha firma'), onSort: onSort),
-                      DataColumn(label: const Text('Estado'), onSort: onSort),
-                      DataColumn(label: const Text('Creada'), onSort: onSort),
+                      DataColumn(label: const Text('Fecha firma'), onSort: (columnIndex, ascending) => onSort(1, !sortAscending)),
+                      DataColumn(label: const Text('Estado'), onSort: (columnIndex, ascending) => onSort(2, !sortAscending)),
+                      DataColumn(label: const Text('Creada'), onSort: (columnIndex, ascending) => onSort(3, !sortAscending)),
                     ],
                     rows: page.rows.map((cita) {
                       final estado = CitaEstado.fromDb(cita.estado);

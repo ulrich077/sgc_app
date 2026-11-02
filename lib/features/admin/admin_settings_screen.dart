@@ -15,6 +15,7 @@ import '../../core/widgets/responsive.dart';
 import '../../data/database/app_database.dart';
 import '../documentos/services/placeholder_resolver.dart';
 import 'correos_tab.dart';
+import 'smtp_config_tab.dart';
 
 class AdminSettingsScreen extends ConsumerWidget {
   const AdminSettingsScreen({super.key});
@@ -32,7 +33,7 @@ class AdminSettingsScreen extends ConsumerWidget {
     final colorsAsync = ref.watch(themeColorsProvider);
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Ajustes del sistema'),
@@ -52,6 +53,7 @@ class AdminSettingsScreen extends ConsumerWidget {
           bottom: const TabBar(
             tabs: [
               Tab(icon: Icon(Icons.tune), text: 'General'),
+              Tab(icon: Icon(Icons.dns_outlined), text: 'SMTP'),
               Tab(icon: Icon(Icons.email_outlined), text: 'Correos'),
             ],
           ),
@@ -135,6 +137,7 @@ class AdminSettingsScreen extends ConsumerWidget {
                 const SizedBox(height: AppSizes.xl),
               ],
             ),
+            const SmtpConfigTab(),
             const CorreosTab(),
           ],
         ),

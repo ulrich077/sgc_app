@@ -1,152 +1,76 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/network/network_config.dart';
 import '../../../core/providers/database_provider.dart';
-import '../../../core/providers/sync_provider.dart';
 import '../../../data/database/app_database.dart';
-import '../domain/cita_estado.dart';
-import 'eventos_repository.dart';
-import 'auditoria_repository.dart';
 import '../../correos/data/correos_repository.dart';
 import '../../correos/domain/correo_tipo.dart';
 import '../../correos/services/email_dispatcher.dart';
-
-class CitasPage {
-  final List<Cita> rows;
-  final int totalFiltered;
-  const CitasPage({required this.rows, required this.totalFiltered});
-}
-
-OrderingTerm _orderBy(String column, bool ascending, $CitasTable t) {
-  final mode = ascending ? OrderingMode.asc : OrderingMode.desc;
-  switch (column) {
-    case 'nombre':
-      return OrderingTerm(expression: t.personaNombre, mode: mode);
-    case 'estado':
-      return OrderingTerm(expression: t.estado, mode: mode);
-    case 'creada':
-      return OrderingTerm(expression: t.dateCreation, mode: mode);
-    case 'fecha':
-    default:
-      return OrderingTerm(expression: t.fechaHoraFirma, mode: mode);
-  }
-}
+import '../domain/cita_estado.dart';
 
 class CitasRepository {
   final AppDatabase _db;
   final ApiClient? _api;
-  final NetworkConfig? _network;
 
-  CitasRepository(
-    this._db, {
-    ApiClient? api,
-    NetworkConfig? network,
-  })  : _api = api, // ignore: prefer_initializing_formals
-        _network = network; // ignore: prefer_initializing_formals
+  CitasRepository(this._db, {ApiClient? api}) : _api = api;
 
-  bool get _esClienteRemoto =>
-      _api != null && _network != null && !_network.esServidor;
+  bool get _esClienteRemoto => _api != null;
 
-  Stream<CitasPage> watchPage({
-    required int page,
-    required int pageSize,
-    CitaEstado? estadoFiltro,
-    String search = '',
-    String sortColumn = 'fecha',
-    bool ascending = false,
-  }) {
-    final query = _db.select(_db.citas)
-      ..where((t) => t.isDelete.equals(false));
-
-    if (estadoFiltro != null) {
-      query.where((t) => t.estado.equals(estadoFiltro.dbValue));
-    }
-
-    if (search.trim().isNotEmpty) {
-      final s = '%${search.trim()}%';
-      query.where((t) =>
-          t.personaNombre.like(s) |
-          t.personaDpi.like(s) |
-          t.personaCorreo.like(s) |
-          t.personaTelefono.like(s));
-    }
-
-    query.orderBy([(t) => _orderBy(sortColumn, ascending, t)]);
-    query.limit(pageSize, offset: page * pageSize);
-
-    final countQuery = _db.selectOnly(_db.citas)
-      ..addColumns([_db.citas.id.count()])
-      ..where(_db.citas.isDelete.equals(false));
-    if (estadoFiltro != null) {
-      countQuery.where(_db.citas.estado.equals(estadoFiltro.dbValue));
-    }
-    if (search.trim().isNotEmpty) {
-      final s = '%${search.trim()}%';
-      countQuery.where(_db.citas.personaNombre.like(s) |
-          _db.citas.personaDpi.like(s) |
-          _db.citas.personaCorreo.like(s) |
-          _db.citas.personaTelefono.like(s));
-    }
-
-    return query.watch().asyncMap((rows) async {
-      final countRow = await countQuery.getSingle();
-      final total = countRow.read(_db.citas.id.count()) ?? 0;
-      return CitasPage(rows: rows, totalFiltered: total);
-    });
+  Future<Cita?> porId(int id) {
+    return (_db.select(_db.citas)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
-
-  Future<Cita?> porId(int id) =>
-      (_db.select(_db.citas)..where((t) => t.id.equals(id)))
-          .getSingleOrNull();
 
   Future<int> crear({
     required String personaNombre,
     required String personaCorreo,
+    required String? personaDpi,
+    required String? personaTelefono,
     required DateTime fechaHoraFirma,
-    String? personaDpi,
-    String? personaTelefono,
+    String? categoriaMotivoReagenda,
     String? notas,
     required int creadaPor,
   }) async {
+    final uuid = const Uuid().v4();
+    final token = const Uuid().v4().replaceAll('-', '');
+    final fechaSegundos = fechaHoraFirma.millisecondsSinceEpoch ~/ 1000;
+
     if (_esClienteRemoto) {
-      final res = await _api!.crearCita({
+      await _api!.crearCita({
+        'uuidPublico': uuid,
         'personaNombre': personaNombre,
         'personaCorreo': personaCorreo,
-        'fechaHoraFirma': fechaHoraFirma.millisecondsSinceEpoch,
         'personaDpi': personaDpi,
         'personaTelefono': personaTelefono,
-        'notas': notas,
+        'fechaHoraFirma': fechaSegundos,
+        'tokenConfirmacion': token,
         'creadaPor': creadaPor,
+        'notas': notas,
       });
-      return (res['id'] as num).toInt();
+      return -1;
     }
 
-    final uuid =
-        '${DateTime.now().microsecondsSinceEpoch}-${_db.hashCode}';
-    final token = _generarToken();
+    final id = await _db.into(_db.citas).insert(
+      CitasCompanion.insert(
+        uuidPublico: uuid,
+        personaNombre: personaNombre,
+        personaCorreo: personaCorreo,
+        personaDpi: Value(personaDpi),
+        personaTelefono: Value(personaTelefono),
+        fechaHoraFirma: fechaSegundos,
+        estado: Value(CitaEstado.citaCreada.dbValue),
+        tokenConfirmacion: Value(token),
+        categoriaMotivoReagenda: Value(categoriaMotivoReagenda),
+        notas: Value(notas),
+        creadaPor: creadaPor,
+        dateCreation: Value(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+        dateUpdated: Value(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+        isDelete: const Value(false),
+      ),
+    );
+
     final cfgRows = await _db.select(_db.configuracion).get();
     final cfg = {for (final r in cfgRows) r.clave: r.valor};
-    final diasToken =
-        int.tryParse(cfg['dias_vencimiento_token'] ?? '') ?? 30;
-    final expira = DateTime.now()
-        .add(Duration(days: diasToken))
-        .millisecondsSinceEpoch;
-
-    final id = await _db.into(_db.citas).insert(CitasCompanion.insert(
-          uuidPublico: uuid,
-          personaNombre: personaNombre,
-          personaCorreo: personaCorreo,
-          fechaHoraFirma: fechaHoraFirma.millisecondsSinceEpoch,
-          personaDpi: Value(personaDpi),
-          personaTelefono: Value(personaTelefono),
-          notas: Value(notas),
-          creadaPor: creadaPor,
-          tokenConfirmacion: Value(token),
-          tokenExpira: Value(expira),
-          dateCreation: Value(DateTime.now().millisecondsSinceEpoch),
-          userCreation: Value(creadaPor),
-        ));
 
     await _encolarCorreoPrueba(
       id: id,
@@ -158,25 +82,7 @@ class CitasRepository {
       token: token,
     );
 
-    await AuditoriaRepository(_db).registrar(
-      userId: creadaPor,
-      tabla: 'citas',
-      registroId: id,
-      accion: 'crear',
-      valorDespues: {
-        'personaNombre': personaNombre,
-        'personaCorreo': personaCorreo,
-        'fechaHoraFirma': fechaHoraFirma.millisecondsSinceEpoch,
-      },
-    );
-
     return id;
-  }
-
-  String _generarToken() {
-    // Token simple basado en microsegundos + hash. Para producción usar uuid v4.
-    final ms = DateTime.now().microsecondsSinceEpoch;
-    return '${ms.toRadixString(16)}${_db.hashCode.toRadixString(16)}';
   }
 
   Future<void> _encolarCorreoPrueba({
@@ -191,12 +97,11 @@ class CitasRepository {
     final servidorIp = cfg['servidor_ip'] ?? '';
     final puerto = cfg['servidor_puerto'] ?? '8080';
     final enlace = servidorIp.isEmpty
-        ? '(configura la IP del servidor)'
+        ? ''
         : 'http://$servidorIp:$puerto/api/confirmar/$token';
     final plantilla = cfg['plantilla_prueba'] ?? '';
     final empresa = cfg['empresa_nombre'] ?? 'SGC';
 
-    // Cita sintética para el dispatcher
     final cita = Cita(
       id: id,
       uuidPublico: '',
@@ -204,8 +109,8 @@ class CitasRepository {
       personaCorreo: personaCorreo,
       personaDpi: personaDpi,
       personaTelefono: null,
-      fechaHoraFirma: fechaHoraFirma.millisecondsSinceEpoch,
-      estado: 'CITA_CREADA',
+      fechaHoraFirma: fechaHoraFirma.millisecondsSinceEpoch ~/ 1000,
+      estado: CitaEstado.citaCreada.dbValue,
       tokenConfirmacion: token,
       tokenExpira: null,
       confirmadoRecibidoAt: null,
@@ -223,6 +128,7 @@ class CitasRepository {
       dateUpdated: null,
       isDelete: false,
     );
+
     final cuerpo = EmailDispatcher.resolverPlantilla(
       plantilla: plantilla,
       cita: cita,
@@ -236,6 +142,41 @@ class CitasRepository {
       destinatario: personaCorreo,
       asunto: EmailDispatcher.asuntoPara(CorreoTipo.prueba, empresa: empresa),
       cuerpoHtml: cuerpo,
+    );
+  }
+
+  Future<void> reenviarCorreoPrueba(int citaId) async {
+    final cita = await porId(citaId);
+    if (cita == null) throw Exception('Cita no encontrada');
+
+    final cfgRows = await _db.select(_db.configuracion).get();
+    final cfg = {for (final r in cfgRows) r.clave: r.valor};
+
+    await _encolarCorreoPrueba(
+      id: citaId,
+      cfg: cfg,
+      personaNombre: cita.personaNombre,
+      personaCorreo: cita.personaCorreo,
+      personaDpi: cita.personaDpi,
+      fechaHoraFirma: DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma * 1000),
+      token: cita.tokenConfirmacion ?? '',
+    );
+  }
+
+  Future<void> actualizarCorreo(int citaId, String nuevoCorreo, int userId) async {
+    if (_esClienteRemoto) {
+      await _api!.actualizarCita(citaId, {
+        'personaCorreo': nuevoCorreo,
+        'userUpdated': userId,
+      });
+      return;
+    }
+    await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
+      CitasCompanion(
+        personaCorreo: Value(nuevoCorreo),
+        dateUpdated: Value(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+        userUpdated: Value(userId),
+      ),
     );
   }
 
@@ -254,26 +195,9 @@ class CitasRepository {
     await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
       CitasCompanion(
         estado: Value(nuevoEstado.dbValue),
-        dateUpdated: Value(DateTime.now().millisecondsSinceEpoch),
+        dateUpdated: Value(DateTime.now().millisecondsSinceEpoch ~/ 1000),
         userUpdated: Value(userId),
       ),
-    );
-
-    // Registrar evento
-    await EventosRepository(_db).registrar(
-      citaId: citaId,
-      tipoEvento: 'estado_cambiado',
-      detalle: {'nuevo_estado': nuevoEstado.dbValue},
-      userId: userId,
-    );
-
-    // Auditar
-    await AuditoriaRepository(_db).registrar(
-      userId: userId,
-      tabla: 'citas',
-      registroId: citaId,
-      accion: 'cambiar_estado',
-      valorDespues: {'estado': nuevoEstado.dbValue},
     );
 
     if (nuevoEstado == CitaEstado.contratoEnviado) {
@@ -289,15 +213,12 @@ class CitasRepository {
     final cfgRows = await _db.select(_db.configuracion).get();
     final cfg = {for (final r in cfgRows) r.clave: r.valor};
 
-    // Adjuntos: contrato firmado + documento de responsabilidad firmado
     final docs = await (_db.select(_db.documentos)
-          ..where((t) =>
-              t.citaId.equals(citaId) & t.isDelete.equals(false)))
+          ..where((t) => t.citaId.equals(citaId) & t.isDelete.equals(false)))
         .get();
     final adjuntos = <String>[];
     for (final d in docs) {
-      if (d.tipo == 'contrato_firmado' ||
-          d.tipo == 'responsabilidad_firmado') {
+      if (d.tipo == 'contrato_firmado' || d.tipo == 'responsabilidad_firmado') {
         adjuntos.add(d.rutaArchivo);
       }
     }
@@ -344,6 +265,26 @@ class CitasRepository {
     );
   }
 
+  Future<void> cambiarCheckPostMortem(int citaId, bool valor, int userId) async {
+    await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
+      CitasCompanion(
+        postMortemPresentado: Value(valor),
+        dateUpdated: Value(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+        userUpdated: Value(userId),
+      ),
+    );
+  }
+
+  Future<void> cambiarCheckContraloria(int citaId, bool valor, int userId) async {
+    await (_db.update(_db.citas)..where((t) => t.id.equals(citaId))).write(
+      CitasCompanion(
+        contraloriaPresentada: Value(valor),
+        dateUpdated: Value(DateTime.now().millisecondsSinceEpoch ~/ 1000),
+        userUpdated: Value(userId),
+      ),
+    );
+  }
+
   Stream<int> watchTotalPorEstado(CitaEstado estado) {
     return (_db.select(_db.citas)
           ..where((t) =>
@@ -355,23 +296,58 @@ class CitasRepository {
   Stream<List<Cita>> watchRecientes({int limit = 10}) {
     return (_db.select(_db.citas)
           ..where((t) => t.isDelete.equals(false))
-          ..orderBy([
-            (t) => OrderingTerm(
-                expression: t.dateCreation, mode: OrderingMode.desc)
-          ])
+          ..orderBy([(t) => OrderingTerm.desc(t.dateCreation)])
           ..limit(limit))
         .watch();
   }
+
+  Stream<CitasPage> watchPage({
+    int page = 0,
+    int pageSize = 20,
+    CitaEstado? estadoFiltro,
+    String search = '',
+    String sortColumn = 'fecha',
+    bool ascending = false,
+  }) {
+    final q = _db.select(_db.citas)..where((t) => t.isDelete.equals(false));
+
+    if (estadoFiltro != null) {
+      q.where((t) => t.estado.equals(estadoFiltro.dbValue));
+    }
+    if (search.isNotEmpty) {
+      q.where((t) => t.personaNombre.like('%$search%'));
+    }
+
+    switch (sortColumn) {
+      case 'nombre':
+        q.orderBy([(t) => OrderingTerm(expression: t.personaNombre, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'estado':
+        q.orderBy([(t) => OrderingTerm(expression: t.estado, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'creada':
+        q.orderBy([(t) => OrderingTerm(expression: t.dateCreation, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'fecha':
+      default:
+        q.orderBy([(t) => OrderingTerm(expression: t.fechaHoraFirma, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+    }
+
+    q.limit(pageSize, offset: page * pageSize);
+
+    return q.watch().map((rows) => CitasPage(rows: rows, totalFiltered: rows.length));
+  }
 }
 
-/// Provider que se reconfigura cuando cambia networkConfig o apiClient.
 final citasRepositoryProvider = Provider<CitasRepository>((ref) {
   final db = ref.watch(databaseProvider);
-  final netAsync = ref.watch(networkConfigProvider);
-  final apiAsync = ref.watch(apiClientProvider);
-
-  final net = netAsync.maybeWhen(data: (c) => c, orElse: () => null);
-  final api = apiAsync.maybeWhen(data: (a) => a, orElse: () => null);
-
-  return CitasRepository(db, api: api, network: net);
+  return CitasRepository(db);
 });
+
+class CitasPage {
+  final List<Cita> rows;
+  final int totalFiltered;
+
+  CitasPage({required this.rows, required this.totalFiltered});
+}

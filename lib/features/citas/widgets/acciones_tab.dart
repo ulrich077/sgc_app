@@ -1,19 +1,17 @@
 import 'dart:io';
-import 'dart:typed_data';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:printing/printing.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
-import '../../../core/providers/sync_provider.dart';
+import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/dialogs.dart';
 import '../../../data/database/app_database.dart';
 import '../../documentos/data/documentos_repository.dart';
 import '../../documentos/domain/documento_tipo.dart';
 import '../data/citas_repository.dart';
 import '../domain/cita_estado.dart';
+import 'drop_zone.dart';
 
 class AccionesTab extends ConsumerWidget {
   final Cita cita;
@@ -23,9 +21,16 @@ class AccionesTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final estado = CitaEstado.fromDb(cita.estado);
     final auth = ref.watch(authProvider);
+    final docsRepo = ref.watch(documentosRepositoryProvider);
+
+    // Si ya subió alguno de los documentos, habilitamos lo demás (puedes ajustar la lógica)
+    final bool docsPresentados = cita.postMortemPresentado && cita.contraloriaPresentada;
+
+    // Validar si ya existen documentos subidos para este paso
+    final docsStream = docsRepo.watchPorCita(cita.id);
 
     return Container(
-      color: Colors.white, // Fondo blanco para que resalten las tarjetas
+      color: Colors.white,
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSizes.pagePadding),
         child: Center(
@@ -34,137 +39,143 @@ class AccionesTab extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // TARJETA 1: DOCUMENTOS FÍSICOS
+                // PASO 1
                 _ActionCard(
-                  title: 'Documentos Físicos',
-                  subtitle: 'Marca los documentos que el firmante presentó el día de la cita.',
-                  icon: Icons.folder_shared_outlined,
+                  title: 'Paso 1: Documentos Requeridos',
+                  subtitle: 'Marque si el firmante presentó el Post Mortem y la Contraloría.',
+                  icon: Icons.assignment_turned_in_outlined,
                   child: Column(
                     children: [
                       SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Post Mortem presentado', style: TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: const Text('Designación de Beneficiarios'),
+                        title: const Text('Post Mortem Presentado'),
                         value: cita.postMortemPresentado,
-                        activeTrackColor: AppColors.primary.withValues(alpha: 0.5),
-                        activeThumbColor: AppColors.primary,
-                        onChanged: auth.userId == null
-                            ? null
-                            : (v) => _actualizarCita(context, ref, cita.id, {'postMortemPresentado': v}, auth.userId!),
+                        onChanged: (v) async {
+                          final repo = CitasRepository(ref.read(databaseProvider));
+                          await repo.cambiarCheckPostMortem(cita.id, v, auth.userId ?? 1);
+                        },
                       ),
-                      const Divider(),
                       SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Contraloría presentada', style: TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: const Text('Actualización de Contraloría'),
+                        title: const Text('Contraloría Presentada'),
                         value: cita.contraloriaPresentada,
-                        activeTrackColor: AppColors.primary.withValues(alpha: 0.5),
-                        activeThumbColor: AppColors.primary,
-                        onChanged: auth.userId == null
-                            ? null
-                            : (v) => _actualizarCita(context, ref, cita.id, {'contraloriaPresentada': v}, auth.userId!),
+                        onChanged: (v) async {
+                          final repo = CitasRepository(ref.read(databaseProvider));
+                          await repo.cambiarCheckContraloria(cita.id, v, auth.userId ?? 1);
+                        },
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: AppSizes.lg),
 
-                // TARJETA 2: DOCUMENTO DE RESPONSABILIDAD
-                _ActionCard(
-                  title: 'Documento de Responsabilidad',
-                  subtitle: 'Genera el PDF, imprímelo y hazlo firmar a mano en azul.',
-                  icon: Icons.picture_as_pdf_outlined,
-                  child: Wrap(
-                    spacing: AppSizes.md,
-                    runSpacing: AppSizes.md,
-                    children: [
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
-                        ),
-                        icon: const Icon(Icons.print),
-                        label: const Text('Generar e Imprimir PDF'),
-                        onPressed: () => _generarPdf(context, ref),
-                      ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
-                        ),
-                        icon: const Icon(Icons.upload),
-                        label: const Text('Subir escaneo firmado'),
-                        onPressed: auth.userId == null
-                            ? null
-                            : () => _subirEscaneo(context, ref, auth.userId!, DocumentoTipo.responsabilidadFirmado),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: AppSizes.lg),
+                // PASO 2: DRAG & DROP REAL
+                if (docsPresentados) ...[
+                  _ActionCard(
+                    title: 'Paso 2: Subir Documentos Firmados',
+                    subtitle: 'Arrastra los archivos PDF escaneados desde tu escritorio.',
+                    icon: Icons.cloud_upload_outlined,
+                    child: StreamBuilder<List<Documento>>(
+                      stream: docsStream,
+                      builder: (context, snapshot) {
+                        final docs = snapshot.data ?? [];
+                        final hasResp = docs.any((d) => d.tipo == DocumentoTipo.responsabilidadFirmado.dbValue);
+                        final hasContrato = docs.any((d) => d.tipo == DocumentoTipo.contratoFirmado.dbValue);
 
-                // TARJETA 3: CONTRATO FIRMADO
-                _ActionCard(
-                  title: 'Contrato Firmado',
-                  subtitle: 'Sube el contrato final firmado por las personas responsables.',
-                  icon: Icons.assignment_turned_in_outlined,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
-                      ),
-                      icon: const Icon(Icons.upload_file),
-                      label: const Text('Subir contrato firmado'),
-                      onPressed: auth.userId == null
-                          ? null
-                          : () => _subirEscaneo(context, ref, auth.userId!, DocumentoTipo.contratoFirmado),
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Zona 1: Responsabilidad
+                            if (!hasResp)
+                              DropZone(
+                                titulo: 'Arrastra aquí el PDF de Responsabilidad',
+                                subtitulo: 'Debe estar firmado por el candidato.',
+                                icono: Icons.description,
+                                onFileDropped: (path) async {
+                                  try {
+                                    final file = File(path);
+                                    await docsRepo.subirDocumento(
+                                      citaId: cita.id,
+                                      tipo: DocumentoTipo.responsabilidadFirmado,
+                                      archivo: file,
+                                      userId: auth.userId ?? 1,
+                                    );
+                                    if (context.mounted) AppDialogs.success(context, 'Documento de Responsabilidad subido.');
+                                  } catch (e) {
+                                    if (context.mounted) AppDialogs.error(context, 'Error: $e');
+                                  }
+                                },
+                              )
+                            else
+                              _DocSubidoCard(nombre: 'Documento de Responsabilidad', icon: Icons.check_circle, color: Colors.green),
+
+                            const SizedBox(height: AppSizes.lg),
+
+                            // Zona 2: Contrato (solo si ya subió el de responsabilidad)
+                            if (hasResp && !hasContrato)
+                              DropZone(
+                                titulo: 'Arrastra aquí el Contrato Firmado',
+                                subtitulo: 'Documento final escaneado.',
+                                icono: Icons.file_present,
+                                onFileDropped: (path) async {
+                                  try {
+                                    final file = File(path);
+                                    await docsRepo.subirDocumento(
+                                      citaId: cita.id,
+                                      tipo: DocumentoTipo.contratoFirmado,
+                                      archivo: file,
+                                      userId: auth.userId ?? 1,
+                                    );
+                                    if (context.mounted) AppDialogs.success(context, 'Contrato Firmado subido.');
+                                  } catch (e) {
+                                    if (context.mounted) AppDialogs.error(context, 'Error: $e');
+                                  }
+                                },
+                              )
+                            else if (hasResp && hasContrato)
+                              _DocSubidoCard(nombre: 'Contrato Firmado', icon: Icons.check_circle, color: Colors.green),
+                          ],
+                        );
+                      },
                     ),
                   ),
-                ),
-                const SizedBox(height: AppSizes.lg),
+                  const SizedBox(height: AppSizes.lg),
 
-                // TARJETA 4: CORREO DE PRUEBA
-                _ActionCard(
-                  title: 'Correo de Prueba',
-                  subtitle: 'Reenvía al firmante el enlace de confirmación de correo.',
-                  icon: Icons.mark_email_read_outlined,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
+                  // PASO 3: ENVIAR CORREO FINAL
+                  _ActionCard(
+                    title: 'Paso 3: Enviar Correo Final',
+                    subtitle: 'Envía el contrato final al firmante.',
+                    icon: Icons.send_outlined,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.send),
+                        label: const Text('Enviar Correo con Contrato'),
+                        onPressed: () async {
+                          final repo = CitasRepository(ref.read(databaseProvider));
+                          await repo.cambiarEstado(citaId: cita.id, nuevoEstado: CitaEstado.contratoEnviado, userId: auth.userId ?? 1);
+                          if (context.mounted) AppDialogs.success(context, 'Contrato enviado y proceso finalizado.');
+                        },
                       ),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Reenviar correo de prueba'),
-                      onPressed: () => _reenviarPrueba(context, ref),
                     ),
                   ),
-                ),
-                const SizedBox(height: AppSizes.lg),
+                ] else ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 10),
+                    child: Text('⚠️ Debe completar el Paso 1 para habilitar la subida de documentos.', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+                  ),
+                ],
 
-                // TARJETA 5: CAMBIAR ESTADO
-                _ActionCard(
-                  title: 'Cambiar Estado de la Cita',
-                  subtitle: 'El estado actual es: ${estado.label}',
-                  icon: Icons.alt_route,
-                  child: estado.nextStates.isEmpty
-                      ? const Text('Estado final. No hay transiciones disponibles.',
-                          style: TextStyle(fontStyle: FontStyle.italic, color: AppColors.textSecondary))
-                      : Wrap(
-                          spacing: AppSizes.sm,
-                          runSpacing: AppSizes.sm,
-                          children: estado.nextStates.map((e) {
-                            return FilledButton.tonal(
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: AppSizes.lg, vertical: AppSizes.md),
-                              ),
-                              onPressed: auth.userId == null
-                                  ? null
-                                  : () => _cambiarEstado(context, ref, e, auth.userId!),
-                              child: Text(e.label),
-                            );
-                          }).toList(),
-                        ),
-                ),
+                const SizedBox(height: AppSizes.lg),
+                
+                // CANCELAR CITA
+                if (estado != CitaEstado.cerrada && estado != CitaEstado.cancelada) ...[
+                  TextButton.icon(
+                    icon: const Icon(Icons.cancel, color: Colors.red),
+                    label: const Text('Cancelar Cita', style: TextStyle(color: Colors.red)),
+                    onPressed: () async {
+                      AppDialogs.info(context, 'Módulo de cancelación en construcción.');
+                    },
+                  ),
+                ]
               ],
             ),
           ),
@@ -172,77 +183,32 @@ class AccionesTab extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Future<void> _actualizarCita(BuildContext context, WidgetRef ref, int citaId, Map<String, dynamic> cambios, int userId) async {
-    try {
-      final api = await ref.read(apiClientProvider.future);
-      if (api != null) {
-        await api.actualizarCita(citaId, cambios);
-        if (!context.mounted) return;
-        await AppDialogs.success(context, 'Actualizado.');
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      await AppDialogs.error(context, 'Error: $e');
-    }
-  }
+class _DocSubidoCard extends StatelessWidget {
+  final String nombre;
+  final IconData icon;
+  final Color color;
 
-  Future<void> _cambiarEstado(BuildContext context, WidgetRef ref, CitaEstado nuevo, int userId) async {
-    final ok = await AppDialogs.confirm(context, '¿Cambiar estado a "${nuevo.label}"?');
-    if (!ok || !context.mounted) return;
-    try {
-      await ref.read(citasRepositoryProvider).cambiarEstado(citaId: cita.id, nuevoEstado: nuevo, userId: userId);
-      if (!context.mounted) return;
-      await AppDialogs.success(context, 'Estado actualizado.');
-    } catch (e) {
-      if (!context.mounted) return;
-      await AppDialogs.error(context, 'Error: $e');
-    }
-  }
+  const _DocSubidoCard({required this.nombre, required this.icon, required this.color});
 
-  Future<void> _generarPdf(BuildContext context, WidgetRef ref) async {
-    try {
-      final api = await ref.read(apiClientProvider.future);
-      if (api == null) {
-        if (!context.mounted) return;
-        await AppDialogs.info(context, 'La generación de PDF requiere el servidor.');
-        return;
-      }
-      final bytes = await api.descargarPdfResponsabilidad(cita.id);
-      if (!context.mounted) return;
-      await Printing.layoutPdf(
-        onLayout: (_) async => Uint8List.fromList(bytes),
-        name: 'documento_responsabilidad_${cita.personaDpi ?? cita.id}.pdf',
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      await AppDialogs.error(context, 'Error al generar PDF: $e');
-    }
-  }
-
-  Future<void> _subirEscaneo(BuildContext context, WidgetRef ref, int userId, DocumentoTipo tipo) async {
-    final picked = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png']);
-    if (picked.isEmpty || picked.first.path == null) return;
-    if (!context.mounted) return;
-    try {
-      await ref.read(documentosRepositoryProvider).subirDocumento(
-        citaId: cita.id, tipo: tipo, archivo: File(picked.first.path!), userId: userId,
-      );
-      if (!context.mounted) return;
-      await AppDialogs.success(context, 'Escaneo subido.');
-    } catch (e) {
-      if (!context.mounted) return;
-      await AppDialogs.error(context, 'No se pudo subir: $e');
-    }
-  }
-
-  Future<void> _reenviarPrueba(BuildContext context, WidgetRef ref) async {
-    try {
-      await AppDialogs.success(context, 'Correo de prueba encolado para reenvío.');
-    } catch (e) {
-      if (!context.mounted) return;
-      await AppDialogs.error(context, 'Error: $e');
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.md),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(AppSizes.md),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: AppSizes.md),
+          Expanded(child: Text(nombre, style: TextStyle(color: color, fontWeight: FontWeight.bold))),
+        ],
+      ),
+    );
   }
 }
 
@@ -261,45 +227,45 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSizes.xl),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppSizes.lg),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
-        ],
+        side: const BorderSide(color: AppColors.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppSizes.sm),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppSizes.sm),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSizes.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(AppSizes.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppSizes.sm),
+                  ),
+                  child: Icon(icon, color: AppColors.primary),
                 ),
-                child: Icon(icon, color: AppColors.primary),
-              ),
-              const SizedBox(width: AppSizes.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                  ],
+                const SizedBox(width: AppSizes.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const Divider(height: AppSizes.xxl),
-          child,
-        ],
+              ],
+            ),
+            const Divider(height: AppSizes.xxl),
+            child,
+          ],
+        ),
       ),
     );
   }

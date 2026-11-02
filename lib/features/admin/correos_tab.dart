@@ -21,8 +21,7 @@ class CorreosTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSizes.pagePadding),
       children: [
-        Text('Cola de correos',
-            style: Theme.of(context).textTheme.titleLarge),
+        Text('Cola de correos', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: AppSizes.sm),
         const Text(
           'Los correos pendientes se envían automáticamente. '
@@ -47,39 +46,41 @@ class CorreosTab extends ConsumerWidget {
               );
             }
             return Card(
+              elevation: 0,
+              color: Colors.transparent,
               child: Column(
                 children: correos.map((c) {
                   final tipo = CorreoTipo.fromDb(c.tipo);
                   final estado = CorreoEstado.fromDb(c.estado);
-                  return ListTile(
-                    leading: _estadoIcon(estado),
-                    title: Text(c.asunto),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${tipo.label} → ${c.destinatario}'),
-                        if (c.errorMensaje != null)
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: AppSizes.sm),
+                    child: ListTile(
+                      leading: _estadoIcon(estado),
+                      title: Text(c.asunto),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${tipo.label} → ${c.destinatario}'),
+                          if (c.errorMensaje != null)
+                            Text(
+                              'Error: ${c.errorMensaje}',
+                              style: const TextStyle(color: AppColors.danger, fontSize: 11),
+                            ),
                           Text(
-                            'Error: ${c.errorMensaje}',
-                            style: const TextStyle(
-                                color: AppColors.danger, fontSize: 11),
+                            'Programado: ${dateFmt.format(DateTime.fromMillisecondsSinceEpoch(c.programadoAt))}'
+                            '${c.intentos > 0 ? ' — intentos: ${c.intentos}' : ''}',
+                            style: const TextStyle(fontSize: 11),
                           ),
-                        Text(
-                          'Programado: ${dateFmt.format(DateTime.fromMillisecondsSinceEpoch(c.programadoAt))}'
-                          '${c.intentos > 0 ? ' — intentos: ${c.intentos}' : ''}',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ],
+                        ],
+                      ),
+                      trailing: estado == CorreoEstado.fallido || estado == CorreoEstado.pendiente
+                          ? IconButton(
+                              icon: const Icon(Icons.refresh),
+                              tooltip: 'Reintentar',
+                              onPressed: () => _reintentar(context, ref, c.id),
+                            )
+                          : null,
                     ),
-                    trailing: estado == CorreoEstado.fallido ||
-                            estado == CorreoEstado.pendiente
-                        ? IconButton(
-                            icon: const Icon(Icons.refresh),
-                            tooltip: 'Reintentar',
-                            onPressed: () =>
-                                _reintentar(context, ref, c.id),
-                          )
-                        : null,
                   );
                 }).toList(),
               ),
@@ -101,12 +102,8 @@ class CorreosTab extends ConsumerWidget {
     }
   }
 
-  Future<void> _reintentar(
-      BuildContext context, WidgetRef ref, int id) async {
-    final ok = await AppDialogs.confirm(
-      context,
-      '¿Reintentar el envío de este correo ahora?',
-    );
+  Future<void> _reintentar(BuildContext context, WidgetRef ref, int id) async {
+    final ok = await AppDialogs.confirm(context, '¿Reintentar el envío de este correo ahora?');
     if (!ok || !context.mounted) return;
     try {
       final db = ref.read(databaseProvider);

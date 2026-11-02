@@ -1,31 +1,26 @@
-/// Resuelve placeholders del texto legal configurado en ajustes.
 class PlaceholderResolver {
+  static const String ayudaPlaceholders = 
+      'Placeholders disponibles:\n'
+      '{{nombre}}, {{dpi}}, {{correo}}, {{fecha}}, {{hora}}, {{dias_cgc}}, {{empresa_nombre}}, {{enlace_confirmacion}}, {{motivo}}';
+
   static String resolver(
     String plantilla, {
-    required String nombre,
+    String? nombre,
     String? dpi,
-    required String correo,
-    required String fecha,
-    required int diasCgc,
-    required String empresaNombre,
+    String? correo,
+    String? fecha,
+    String? hora,
+    int? diasCgc,
+    String? empresaNombre,
   }) {
-    return plantilla
-        .replaceAll('{{nombre}}', nombre)
-        .replaceAll('{{dpi}}', dpi ?? '—')
-        .replaceAll('{{correo}}', correo)
-        .replaceAll('{{fecha}}', fecha)
-        .replaceAll('{{dias_cgc}}', diasCgc.toString())
-        .replaceAll('{{empresa_nombre}}', empresaNombre);
+    var res = plantilla;
+    res = res.replaceAll('{{nombre}}', nombre ?? '');
+    res = res.replaceAll('{{dpi}}', dpi ?? '');
+    res = res.replaceAll('{{correo}}', correo ?? '');
+    res = res.replaceAll('{{fecha}}', fecha ?? '');
+    res = res.replaceAll('{{hora}}', hora ?? '');
+    res = res.replaceAll('{{dias_cgc}}', diasCgc?.toString() ?? '');
+    res = res.replaceAll('{{empresa_nombre}}', empresaNombre ?? '');
+    return res;
   }
-
-  /// Placeholders documentados para el admin en ajustes.
-  static const String ayudaPlaceholders = '''
-Placeholders disponibles:
-{{nombre}}          Nombre completo del firmante
-{{dpi}}             DPI del firmante
-{{correo}}          Correo del firmante
-{{fecha}}           Fecha de la firma (dd/MM/yyyy)
-{{dias_cgc}}        Días límite para apersonarse a la CGC
-{{empresa_nombre}}  Nombre de la empresa configurado en ajustes
-''';
 }

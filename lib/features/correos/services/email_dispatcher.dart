@@ -13,13 +13,18 @@ class EmailDispatcher {
     String? nuevaFecha,
   }) {
     final diasCgc = int.tryParse(config['dias_limite_cgc'] ?? '') ?? 30;
+    
+    // REGLA VI: La DB guarda segundos, multiplicamos por 1000 para milisegundos.
     final fechaFirma = DateTime.fromMillisecondsSinceEpoch(
-            cita.fechaHoraFirma)
+            cita.fechaHoraFirma * 1000)
         .toLocal();
+        
     final fechaStr =
         '${fechaFirma.day.toString().padLeft(2, '0')}/'
         '${fechaFirma.month.toString().padLeft(2, '0')}/'
         '${fechaFirma.year}';
+
+    final horaStr = '${fechaFirma.hour.toString().padLeft(2, '0')}:${fechaFirma.minute.toString().padLeft(2, '0')}';
 
     var cuerpo = PlaceholderResolver.resolver(
       plantilla,
@@ -27,6 +32,7 @@ class EmailDispatcher {
       dpi: cita.personaDpi,
       correo: cita.personaCorreo,
       fecha: nuevaFecha ?? fechaStr,
+      hora: horaStr, // <-- AGREGAMOS LA HORA
       diasCgc: diasCgc,
       empresaNombre: config['empresa_nombre'] ?? '',
     );

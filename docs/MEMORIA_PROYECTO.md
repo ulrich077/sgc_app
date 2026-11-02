@@ -727,3 +727,41 @@ FIN DE FASE 6
 - El botón "Generar PDF" requiere que el servidor esté corriendo para descargar el PDF. Si es cliente, el servidor debe tener la IP configurada en ajustes.
 
 FIN DE LA SESIÓN 31
+
+---
+
+## 32. SESIÓN DE ESTABILIZACIÓN, DISEÑO PREMIUM Y FIXES (2026-11-01 - TARDE/NOCHE)
+
+### 32.1. Configuración Crítica del SDK (¡Importante para nuevos chats!)
+- **Flutter 3.47.9 tiene un bug** con `invalid-type` en macOS. NO USAR.
+- Se descargó e instaló **Flutter 3.47.3 (Dart 3.13.3)** manualmente en `/Users/ulrichceballos/Desktop/flutter_3473`.
+- **SIEMPRE** que se abra una terminal nueva, se debe forzar el PATH antes de cualquier comando:
+  `export PATH="/Users/ulrichceballos/Desktop/flutter_3473/bin:$PATH"`
+- Se configuró un `.vscode/settings.json` local apuntando a esta ruta para evitar que VS Code use el SDK global roto.
+
+### 32.2. Configuración de macOS (Xcode, Firma y Sandbox)
+- **Llavero (Keychain):** `flutter_secure_storage` fallaba con el código `-34018`. Se solucionó usando `MacOsOptions(usesDataProtectionKeychain: false)` en `auth_provider.dart`.
+- **Firma Local:** Para evitar errores de aprovisionamiento al añadir permisos, se modificó el `project.pbxproj` para que firme con `-` (Sign to Run Locally) y se vaciaron los `DEVELOPMENT_TEAM`.
+- **Permisos de Impresión:** Se agregó el entitlement `com.apple.security.print` a `DebugProfile.entitlements` y `Release.entitlements` para habilitar el PDF.
+- **Ruta de Descargas:** El Sandbox de macOS prohíbe guardar en `/Users/.../Downloads`. El PDF se guarda en `getApplicationDocumentsDirectory()` (la carpeta interna de la app) y se abre con `Process.run('open', [file.path])`.
+
+### 32.3. Rediseño de UI Premium (AppShell y Tablas)
+- **Sidebar:** Rediseñado con el color `primary` dinámico, textos blancos y efecto glassmorphism. Se eliminaron los errores de `ListTile` envolviendo los `Card` en `Material` o quitando el `color` de los `Container` padres.
+- **DataTable (Citas):** Se forzó el ancho al 100% (cumpliendo Regla V) usando `LayoutBuilder`, `ConstrainedBox(minWidth: tableWidth)` y `DataTable` sin anchos fijos. El `onSelectChanged` de cada fila ahora abre el `CitaDetalleModal`. La paginación se movió arriba a la derecha.
+- **Modales:** 
+  - **Nueva Cita:** Es un Wizard de 3 pasos (Datos, Contacto, Resumen). Valida DPI (13 dígitos), Teléfono (8 dígitos) y Correo.
+  - **Detalle de Cita:** Es un `Dialog` de 900px que contiene las 4 pestañas (Datos, Documentos, Acciones, Historial) para no perder el contexto de la tabla.
+- **Diseño de Pestañas:** Se rediseñó el "Empty State" de Documentos e Historial, y las tarjetas de Acciones para que se vean como un CRM moderno.
+
+### 32.4. Flujo de Correos y SMTP
+- Se creó la pestaña `SmtpConfigTab` en Ajustes para que el admin ingrese Host, Puerto, Usuario, Contraseña, Remitente y CC.
+- **Fix del diálogo:** Al guardar el SMTP, la app se ponía en negro porque `AppDialogs` usaba el `rootNavigator` incorrectamente. Se solucionó usando `Navigator.of(ctx).pop()` dentro del `builder` del `showDialog` (usando el contexto local `ctx`).
+- **Nota sobre Unicode en PDF:** El paquete `pdf` muestra un warning (`Helvetica has no Unicode support`). Esto significa que las tildes (á, é, í) no se verán en el PDF generado. Para solucionarlo en el futuro, se debe cargar una fuente TTF (como Roboto) en el servidor y usarla en `PdfService`.
+
+### 32.5. Estado Actual del Proyecto
+- El proyecto está en `/Users/ulrichceballos/Desktop/SGC/sgc_app`.
+- Todos los `flutter analyze` han salido limpios tras los últimos fixes.
+- La arquitectura es: Servidor (Shelf + Drift) + Cliente (Drift local + WebSocket Sync).
+- El flujo completo (Crear cita -> Encolar correo -> Generar PDF -> Guardar en Documentos) está implementado y funcionando.
+
+FIN DE LA SESIÓN 32
