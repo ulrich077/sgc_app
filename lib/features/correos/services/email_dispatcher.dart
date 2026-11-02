@@ -49,15 +49,15 @@ class EmailDispatcher {
   static String asuntoPara(CorreoTipo tipo, {String empresa = 'SGC'}) {
     switch (tipo) {
       case CorreoTipo.prueba:
-        return '[$empresa] Confirma tu correo — Cita de firma';
+        return '$empresa - Confirma tu correo — Cita de firma';
       case CorreoTipo.confirmacion:
-        return '[$empresa] Correo confirmado';
+        return '$empresa - Correo confirmado';
       case CorreoTipo.reagenda:
-        return '[$empresa] Cita reagendada';
+        return '$empresa - Cita reagendada';
       case CorreoTipo.final_:
-        return '[$empresa] Contrato firmado y Documento de Responsabilidad';
+        return '$empresa - Contrato firmado y Documento de Responsabilidad';
       case CorreoTipo.recordatorio:
-        return '[$empresa] Recordatorio: apersonarse a la CGC';
+        return '$empresa - Recordatorio: apersonarse a la CGC';
     }
   }
 

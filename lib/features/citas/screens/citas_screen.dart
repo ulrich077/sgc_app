@@ -95,6 +95,8 @@ class _CitasScreenState extends ConsumerState<CitasScreen> {
             actions: [
               FilledButton.icon(
                 style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppSizes.lg, vertical: AppSizes.md),
                 ),
