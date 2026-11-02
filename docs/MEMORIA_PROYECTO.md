@@ -210,3 +210,14 @@ FIN DE LA ACTUALIZACIÓN
 ---
 
 FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 12. CORRECCIÓN DEL EMAIL DISPATCHER (2026-11-02)
+
+- Se corrigió `email_dispatcher.dart` para que pase los nuevos campos (`numeroContrato`, `puesto`, `salario`, `ubicacion`, `ubicacionEspecifica`, `fechaInicio`, `fechaFin`) al `PlaceholderResolver`.
+- Anteriormente, el `EmailDispatcher` solo pasaba los campos básicos (nombre, dpi, correo, etc.) y los de Contraloría se perdían.
+
+---
+
+FIN DE LA ACTUALIZACIÓN
