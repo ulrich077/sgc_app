@@ -107,3 +107,71 @@ FIN DE LA MEMORIA
 ---
 
 FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 9. FASE 2.13: FLUJO COMPLETO DE CITAS Y DATOS DE CONTRALORÍA (2026-11-02)
+
+### 9.1. Formulario de Nueva Cita (Rediseño Premium)
+- Se reescribió `nueva_cita_dialog.dart` con un diseño tipo **Checkout**.
+- **Diseño**: Fondo gris, tarjetas blancas con sombras, íconos de FontAwesome.
+- **Secciones**:
+  - **Datos Personales**: Nombre, DPI, Teléfono.
+  - **Datos para Contraloría**: No. Contrato, Puesto, Salario, Dirección (dropdown con 11 opciones), Ubicación Específica, Fecha Inicio, Fecha Fin.
+- **Fecha de Fin**: Por defecto se autocompleta con el **31 de diciembre del año de la Fecha de Inicio**.
+- **Validación**: DPI (13 dígitos), Teléfono (8 dígitos), Correo válido.
+
+### 9.2. Base de Datos (Migración v4)
+- Se agregaron las columnas a la tabla `citas`: `numero_contrato`, `puesto`, `salario`, `ubicacion`, `ubicacion_especifica`, `fecha_inicio`, `fecha_fin`.
+- Se actualizó `app_database.dart` a `schemaVersion = 4` con los `ALTER TABLE` correspondientes.
+- Se actualizó `CitasRepository.crear()` para aceptar y guardar estos campos.
+
+### 9.3. Lógica de Agenda (Configuración)
+- En **Ajustes → Agenda**, se puede configurar:
+  - El **intervalo entre citas** (15, 30 o 45 min).
+  - El **máximo de citas por bloque** (ej. 2).
+- El formulario de Nueva Cita valida:
+  - Si los minutos coinciden con el intervalo.
+  - Si no se supera el máximo de citas por hora.
+- **Mensaje de error premium**: Si el bloque está lleno, muestra un diálogo con la lista de los nombres de las citas ya agendadas.
+
+### 9.4. Correo de Confirmación
+- La plantilla del correo de prueba ahora incluye los datos de Contraloría (Contrato, Puesto, Salario, Dirección, Fechas).
+- Se actualizó `PlaceholderResolver` y `EmailDispatcher` para soportar los nuevos placeholders (`{{numero_contrato}}`, `{{puesto}}`, etc.).
+
+### 9.5. Flujo de Acciones (5 Pasos)
+- **Paso 1**: DropZones para subir Post Mortem y Contraloría.
+- **Paso 2**: Descargar PDF de Responsabilidad y subir el escaneo firmado.
+- **Paso 3**: Subir Contrato Firmado.
+- **Paso 4**: Enviar Correo Final. Botón cambia a "¡Enviado!" y aparece el botón de **"Reenviar Correo"**.
+- **Paso 5**: **Cerrar Cita**. El botón solo aparece si el correo se envió correctamente. Al presionar, la cita pasa a estado `CERRADA`.
+- Todos los pasos usan **Polling** para detectar cuando el worker envía el correo (2 segundos).
+
+### 9.6. Historial Reactivo y Detallado
+- El historial muestra títulos amigables (ej. "Cambio de Estado") y subtítulos descriptivos (ej. "De Cita Creada a Firmado").
+- Cada evento tiene su propio JSON de detalles que se muestra en un modal al hacer clic.
+- Se registran eventos al subir/eliminar documentos, cambiar de estado y errores de envío de correo.
+
+### 9.7. Kanban Reactivo con Drag & Drop
+- El Kanban usa un `StreamProvider` para escuchar los cambios de Drift en tiempo real.
+- Las tarjetas se mueven automáticamente al cambiar de estado (desde Acciones o desde el propio Kanban).
+- Drag & Drop con validación de transiciones de estado.
+
+### 9.8. Alertas de Citas Vencidas
+- Se agregó un `Stream` (`watchVencidas`) en `CitasRepository` que cuenta las citas vencidas.
+- En el **Dashboard**, si hay citas vencidas, aparece un **banner rojo de advertencia**.
+- La tabla de **Citas** oculta las cerradas y canceladas, pero **muestra las vencidas** (para que el operador pueda reagendarlas).
+
+---
+
+## 10. DEUDA TÉCNICA ACTUAL
+
+| Tema | Estado |
+|---|---|
+| Módulo de Cancelar/Reagendar | El modal está implementado, pero falta probar el flujo completo con el envío de correo. |
+| Sync de Documentos y Configuración | El WebSocket solo sincroniza `citas` (falta `documentos` y `configuracion`). |
+| Worker en Cliente | El worker solo corre en el servidor (el cliente no puede enviar correos si el servidor está caído). |
+
+---
+
+FIN DE LA ACTUALIZACIÓN

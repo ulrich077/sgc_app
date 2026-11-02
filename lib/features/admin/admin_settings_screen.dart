@@ -448,6 +448,8 @@ class _AgendaPanel extends ConsumerStatefulWidget {
 class _AgendaPanelState extends ConsumerState<_AgendaPanel> {
   final _ctrlMaxCitas = TextEditingController();
   String _intervalo = '30';
+  String _horaInicio = '09:00';
+  String _horaFin = '16:00';
   bool _loading = true;
   bool _saving = false;
 
@@ -466,6 +468,8 @@ class _AgendaPanelState extends ConsumerState<_AgendaPanel> {
       setState(() {
         _ctrlMaxCitas.text = cfg['max_citas_por_hora'] ?? '2';
         _intervalo = cfg['intervalo_minutos'] ?? '30';
+        _horaInicio = cfg['hora_inicio_atencion'] ?? '09:00';
+        _horaFin = cfg['hora_fin_atencion'] ?? '16:00';
         _loading = false;
       });
     }
@@ -477,6 +481,8 @@ class _AgendaPanelState extends ConsumerState<_AgendaPanel> {
     
     await _upsert(db, 'max_citas_por_hora', _ctrlMaxCitas.text.trim());
     await _upsert(db, 'intervalo_minutos', _intervalo);
+    await _upsert(db, 'hora_inicio_atencion', _horaInicio);
+    await _upsert(db, 'hora_fin_atencion', _horaFin);
 
     if (mounted) {
       setState(() => _saving = false);
@@ -524,6 +530,38 @@ class _AgendaPanelState extends ConsumerState<_AgendaPanel> {
                 controller: _ctrlMaxCitas,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Máximo de citas por bloque', border: OutlineInputBorder()),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSizes.md),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: TextEditingController(text: _horaInicio),
+                readOnly: true,
+                decoration: const InputDecoration(labelText: 'Hora de Inicio de Atención', border: OutlineInputBorder(), prefixIcon: Icon(Icons.access_time)),
+                onTap: () async {
+                  final picked = await showTimePicker(context: context, initialTime: TimeOfDay(hour: 9, minute: 0));
+                  if (picked != null) {
+                    setState(() => _horaInicio = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: AppSizes.md),
+            Expanded(
+              child: TextField(
+                controller: TextEditingController(text: _horaFin),
+                readOnly: true,
+                decoration: const InputDecoration(labelText: 'Hora de Fin de Atención', border: OutlineInputBorder(), prefixIcon: Icon(Icons.access_time)),
+                onTap: () async {
+                  final picked = await showTimePicker(context: context, initialTime: TimeOfDay(hour: 16, minute: 0));
+                  if (picked != null) {
+                    setState(() => _horaFin = '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}');
+                  }
+                },
               ),
             ),
           ],

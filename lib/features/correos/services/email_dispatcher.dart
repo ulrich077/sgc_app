@@ -37,8 +37,10 @@ class EmailDispatcher {
       empresaNombre: config['empresa_nombre'] ?? '',
     );
 
-    if (motivo != null) {
+    if (motivo != null && motivo.isNotEmpty) {
       cuerpo = cuerpo.replaceAll('{{motivo}}', motivo);
+    } else {
+      cuerpo = cuerpo.replaceAll('{{motivo}}', 'No especificado');
     }
     if (enlaceConfirmacion != null) {
       cuerpo = cuerpo.replaceAll('{{enlace_confirmacion}}', enlaceConfirmacion);

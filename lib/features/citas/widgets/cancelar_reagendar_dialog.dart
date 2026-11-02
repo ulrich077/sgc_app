@@ -29,7 +29,8 @@ class CancelarReagendarDialog extends ConsumerStatefulWidget {
 class _CancelarReagendarDialogState extends ConsumerState<CancelarReagendarDialog> {
   final _motivoCtrl = TextEditingController();
   DateTime _nuevaFecha = DateTime.now().add(const Duration(days: 1));
-  TimeOfDay _nuevaHora = const TimeOfDay(hour: 10, minute: 0);
+  List<TimeOfDay> _horariosDisponibles = [];
+  TimeOfDay? _horaSeleccionada;
   
   bool _esReagenda = true;
   bool _saving = false;
@@ -40,6 +41,66 @@ class _CancelarReagendarDialogState extends ConsumerState<CancelarReagendarDialo
     super.dispose();
   }
 
+
+  Future<void> _cargarHorarios() async {
+    final db = ref.read(databaseProvider);
+    final cfgRows = await db.select(db.configuracion).get();
+    final cfg = {for (final r in cfgRows) r.clave: r.valor};
+    
+    final intervalo = int.tryParse(cfg['intervalo_minutos'] ?? '30') ?? 30;
+    final horaInicioStr = cfg['hora_inicio_atencion'] ?? '09:00';
+    final horaFinStr = cfg['hora_fin_atencion'] ?? '16:00';
+    final maxCitas = int.tryParse(cfg['max_citas_por_hora'] ?? '2') ?? 2;
+
+    final partesInicio = horaInicioStr.split(':');
+    final partesFin = horaFinStr.split(':');
+    final inicioHora = int.parse(partesInicio[0]);
+    final inicioMinuto = int.parse(partesInicio[1]);
+    final finHora = int.parse(partesFin[0]);
+    final finMinuto = int.parse(partesFin[1]);
+
+    // Generar bloques de tiempo
+    final bloques = <TimeOfDay>[];
+    var tempHora = inicioHora;
+    var tempMinuto = inicioMinuto;
+    while (tempHora < finHora || (tempHora == finHora && tempMinuto < finMinuto)) {
+      bloques.add(TimeOfDay(hour: tempHora, minute: tempMinuto));
+      tempMinuto += intervalo;
+      if (tempMinuto >= 60) {
+        tempHora += 1;
+        tempMinuto -= 60;
+      }
+    }
+
+    // Consultar la DB para ver cuántas citas hay en cada bloque
+    final inicioDia = DateTime(_nuevaFecha.year, _nuevaFecha.month, _nuevaFecha.day, 0, 0, 0);
+    final finDia = inicioDia.add(const Duration(days: 1));
+    final citasDia = await (db.select(db.citas)
+          ..where((t) => 
+              t.fechaHoraFirma.isBiggerOrEqualValue(inicioDia.millisecondsSinceEpoch ~/ 1000) &
+              t.fechaHoraFirma.isSmallerThanValue(finDia.millisecondsSinceEpoch ~/ 1000) &
+              t.isDelete.equals(false) &
+              t.estado.equals(CitaEstado.cancelada.dbValue).not()))
+        .get();
+
+    final disponibles = <TimeOfDay>[];
+    for (final bloque in bloques) {
+      final fechaBloque = DateTime(_nuevaFecha.year, _nuevaFecha.month, _nuevaFecha.day, bloque.hour, bloque.minute);
+      final segundosBloque = fechaBloque.millisecondsSinceEpoch ~/ 1000;
+      final citasEnBloque = citasDia.where((c) => c.fechaHoraFirma == segundosBloque).length;
+      if (citasEnBloque < maxCitas) {
+        disponibles.add(bloque);
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _horariosDisponibles = disponibles;
+        _horaSeleccionada = null;
+      });
+    }
+  }
+
   Future<void> _pickFecha() async {
     final picked = await showDatePicker(
       context: context,
@@ -47,13 +108,12 @@ class _CancelarReagendarDialogState extends ConsumerState<CancelarReagendarDialo
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (picked != null) setState(() => _nuevaFecha = picked);
+    if (picked != null) {
+      setState(() => _nuevaFecha = picked);
+      _cargarHorarios();
+    }
   }
 
-  Future<void> _pickHora() async {
-    final picked = await showTimePicker(context: context, initialTime: _nuevaHora);
-    if (picked != null) setState(() => _nuevaHora = picked);
-  }
 
   Future<void> _guardar() async {
     final motivo = _motivoCtrl.text.trim();
@@ -71,7 +131,11 @@ class _CancelarReagendarDialogState extends ConsumerState<CancelarReagendarDialo
       final userId = auth.userId ?? 1;
 
       if (_esReagenda) {
-        final nuevaFechaHora = DateTime(_nuevaFecha.year, _nuevaFecha.month, _nuevaFecha.day, _nuevaHora.hour, _nuevaHora.minute);
+        if (_horaSeleccionada == null) {
+          await AppDialogs.error(context, 'Debes seleccionar un horario disponible.');
+          return;
+        }
+        final nuevaFechaHora = DateTime(_nuevaFecha.year, _nuevaFecha.month, _nuevaFecha.day, _horaSeleccionada!.hour, _horaSeleccionada!.minute);
         await repo.hayDisponibilidad(nuevaFechaHora);
 
         await (db.update(db.citas)..where((t) => t.id.equals(widget.cita.id))).write(
@@ -85,7 +149,10 @@ class _CancelarReagendarDialogState extends ConsumerState<CancelarReagendarDialo
 
         await repo.cambiarEstado(citaId: widget.cita.id, nuevoEstado: CitaEstado.reagendada, userId: userId);
         
-        if (mounted) AppDialogs.success(context, 'Cita reagendada. El correo ha sido encolado.');
+        if (mounted) {
+          Navigator.of(context).pop();
+          AppDialogs.success(context, 'Cita reagendada. El correo ha sido encolado.');
+        }
       } else {
         await (db.update(db.citas)..where((t) => t.id.equals(widget.cita.id))).write(
           CitasCompanion(
@@ -95,10 +162,11 @@ class _CancelarReagendarDialogState extends ConsumerState<CancelarReagendarDialo
         );
         await repo.cambiarEstado(citaId: widget.cita.id, nuevoEstado: CitaEstado.cancelada, userId: userId);
 
-        if (mounted) AppDialogs.success(context, 'Cita cancelada definitivamente.');
+        if (mounted) {
+          Navigator.of(context).pop();
+          AppDialogs.success(context, 'Cita cancelada definitivamente.');
+        }
       }
-
-      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) AppDialogs.error(context, 'Error: $e');
     } finally {
@@ -167,25 +235,29 @@ class _CancelarReagendarDialogState extends ConsumerState<CancelarReagendarDialo
             if (_esReagenda) ...[
               const Text('Nueva Fecha y Hora', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const FaIcon(FontAwesomeIcons.calendarDays, size: 16),
-                      label: Text(dateFmt.format(_nuevaFecha)),
-                      onPressed: _pickFecha,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const FaIcon(FontAwesomeIcons.clock, size: 16),
-                      label: Text(_nuevaHora.format(context)),
-                      onPressed: _pickHora,
-                    ),
-                  ),
-                ],
+              OutlinedButton.icon(
+                icon: const FaIcon(FontAwesomeIcons.calendarDays, size: 16),
+                label: Text(dateFmt.format(_nuevaFecha)),
+                onPressed: _pickFecha,
               ),
+              const SizedBox(height: 12),
+              if (_horariosDisponibles.isEmpty)
+                const Text('No hay horarios disponibles para este día.', style: TextStyle(color: Colors.red))
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _horariosDisponibles.map((hora) {
+                    final isSelected = _horaSeleccionada == hora;
+                    return ChoiceChip(
+                      label: Text(hora.format(context)),
+                      selected: isSelected,
+                      onSelected: (v) => setState(() => _horaSeleccionada = hora),
+                      selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                      labelStyle: TextStyle(color: isSelected ? AppColors.primary : Colors.black),
+                    );
+                  }).toList(),
+                ),
               const SizedBox(height: 24),
             ],
 
