@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,14 @@ import 'server/email_queue_worker.dart';
 
 // Variables globales para las instancias del servidor y worker
 SgcServer? globalServerInstance;
+
+/// Cierra el servidor y sale de la aplicación (para reiniciar tras TLS).
+Future<void> cerrarAplicacion() async {
+  try {
+    await globalServerInstance?.stop();
+  } catch (_) {}
+  exit(0);
+}
 EmailQueueWorker? globalWorkerInstance;
 
 void main() async {

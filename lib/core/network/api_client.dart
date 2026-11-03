@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'network_config.dart';
 
 class ApiException implements Exception {
@@ -12,10 +14,16 @@ class ApiException implements Exception {
 
 class ApiClient {
   final NetworkConfig config;
-  ApiClient(this.config);
+  final http.Client _client;
+
+  ApiClient(this.config)
+      : _client = IOClient(
+          HttpClient()
+            ..badCertificateCallback = (cert, host, port) => true,
+        );
 
   Future<Map<String, dynamic>> _get(String path) async {
-    final res = await http.get(Uri.parse('${config.baseHttp}$path'));
+    final res = await _client.get(Uri.parse('${config.baseHttp}$path'));
     if (res.statusCode != 200) {
       throw ApiException(res.statusCode, res.body);
     }
@@ -23,7 +31,7 @@ class ApiClient {
   }
 
   Future<dynamic> _getList(String path) async {
-    final res = await http.get(Uri.parse('${config.baseHttp}$path'));
+    final res = await _client.get(Uri.parse('${config.baseHttp}$path'));
     if (res.statusCode != 200) {
       throw ApiException(res.statusCode, res.body);
     }
@@ -32,7 +40,7 @@ class ApiClient {
 
   Future<Map<String, dynamic>> _post(
       String path, Map<String, dynamic> body) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('${config.baseHttp}$path'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode(body),
@@ -108,7 +116,7 @@ class ApiClient {
       await _getList('/api/correos') as List<dynamic>;
 
   Future<List<int>> descargarPdfResponsabilidad(int citaId) async {
-    final res = await http.post(
+    final res = await _client.post(
       Uri.parse('${config.baseHttp}/api/citas/$citaId/pdf'),
     );
     if (res.statusCode != 200) {

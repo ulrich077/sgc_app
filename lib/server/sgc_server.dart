@@ -7,6 +7,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:shelf_multipart/shelf_multipart.dart';
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:bonsoir/bonsoir.dart';
 import '../data/database/app_database.dart';
 import '../features/documentos/services/file_storage_service.dart';
 import '../features/documentos/services/pdf_service.dart';
@@ -14,6 +15,7 @@ import '../features/correos/data/correos_repository.dart';
 import '../features/correos/domain/correo_tipo.dart';
 import 'drift_change_notifier.dart';
 import 'ws_channel_hub.dart';
+import '../core/network/cert_service.dart';
 
 class SgcServer {
   final AppDatabase db;
@@ -27,6 +29,21 @@ class SgcServer {
 
   Future<void> start({String host = '0.0.0.0', int port = 8080}) async {
     _notifier.start();
+
+    // Anunciar el servicio mDNS con bonsoir (multiplataforma)
+    try {
+      final service = BonsoirService(
+        name: 'SGC-Server',
+        type: '_sgc._tcp',
+        port: port,
+      );
+      final broadcast = BonsoirBroadcast(service: service);
+      await broadcast.initialize();
+      await broadcast.start();
+      stderr.writeln('📡 Servicio mDNS anunciado: SGC-Server');
+    } catch (e) {
+      stderr.writeln('⚠️ Error al anunciar mDNS: $e');
+    }
 
     final router = Router();
 
@@ -329,7 +346,32 @@ class SgcServer {
     final handler =
         const Pipeline().addMiddleware(logRequests()).addHandler(router.call);
 
-    _server = await io.serve(handler, host, port);
+    // TLS si hay certificado generado; si no, HTTP plano con warning.
+    final certPath = await CertService.rutaCert();
+    final keyPath = await CertService.rutaKey();
+
+    if (certPath != null && keyPath != null) {
+      try {
+        final ctx = SecurityContext()
+          ..useCertificateChain(certPath)
+          ..usePrivateKey(keyPath);
+        _server = await io.serve(
+          handler,
+          host,
+          port,
+          securityContext: ctx,
+        );
+        stderr.writeln('🔒 SGC server en https://$host:${_server!.port}');
+      } catch (e) {
+        stderr.writeln('⚠️ Error al cargar TLS: $e — usando HTTP plano');
+        _server = await io.serve(handler, host, port);
+          }
+    } else {
+      stderr.writeln('⚠️ Sin certificado TLS. Sirviendo HTTP en $port.');
+      stderr.writeln('   Genera el certificado desde Ajustes → Red.');
+      _server = await io.serve(handler, host, port);
+      stderr.writeln('SGC server en http://$host:${_server!.port}');
+    }
     stderr.writeln('SGC server en http://$host:${_server!.port}');
   }
 

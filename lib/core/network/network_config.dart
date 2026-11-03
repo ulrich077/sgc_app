@@ -9,11 +9,11 @@ class NetworkConfig {
   const NetworkConfig({
     required this.esServidor,
     required this.servidorIp,
-    this.puerto = 8080,
+    this.puerto = 8443,
   });
 
-  String get baseHttp => 'http://$servidorIp:$puerto';
-  String get baseWs => 'ws://$servidorIp:$puerto/api/ws';
+  String get baseHttp => 'https://$servidorIp:$puerto';
+  String get baseWs => 'wss://$servidorIp:$puerto/api/ws';
   bool get configurado => esServidor || servidorIp.trim().isNotEmpty;
 }
 
@@ -29,7 +29,7 @@ final networkConfigProvider = FutureProvider<NetworkConfig>((ref) async {
     ip = '127.0.0.1';
   }
   
-  final puerto = int.tryParse(map['servidor_puerto'] ?? '') ?? 8080;
+  final puerto = int.tryParse(map['servidor_puerto'] ?? '') ?? 8443;
   
   return NetworkConfig(
     esServidor: esServidor,
