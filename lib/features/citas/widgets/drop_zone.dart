@@ -1,13 +1,14 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
 
 class DropZone extends StatefulWidget {
   final String titulo;
   final String subtitulo;
-  final IconData icono;
+  final dynamic icono; // Acepta IconData o FaIconData
   final Function(String path) onFileDropped;
   final bool habilitado;
 
@@ -82,8 +83,9 @@ class _DropZoneState extends State<DropZone> {
       ),
       child: Column(
         children: [
-          Icon(
-            _isDragging ? Icons.download_done : widget.icono,
+          // Usamos FaIcon en lugar de Icon para aceptar ambos tipos
+          FaIcon(
+            _isDragging ? FontAwesomeIcons.download : widget.icono,
             size: 48,
             color: _isDragging ? AppColors.primary : AppColors.textSecondary,
           ),

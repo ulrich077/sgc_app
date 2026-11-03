@@ -64,6 +64,11 @@ class EmailQueueWorker {
           }
         } catch (_) {}
       }
+      // VALIDACIÓN DE POST MORTEM (para pruebas)
+      if (c.tipo == 'prueba' && adjuntos.isEmpty) {
+        throw Exception('El correo de prueba no tiene el Post Mortem adjunto. Revisa el flujo de guardado.');
+      }
+
       final service = EmailService(cfg);
       await service.enviar(
         destinatario: c.destinatario,

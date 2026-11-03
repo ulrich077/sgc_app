@@ -1,12 +1,19 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:drift/drift.dart' hide Column;
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_sizes.dart';
+import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/dialogs.dart';
 import '../data/citas_repository.dart';
+import '../../documentos/data/documentos_repository.dart';
+import '../../documentos/domain/documento_tipo.dart';
+import 'drop_zone.dart';
 
 class NuevaCitaDialog extends ConsumerStatefulWidget {
   const NuevaCitaDialog({super.key});
@@ -28,10 +35,12 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
   final _salario = TextEditingController();
   final _ubicacionEspecifica = TextEditingController();
   final _fechaInicio = TextEditingController();
-  final _fechaFin = TextEditingController(text: DateFormat('dd/MM/yyyy').format(DateTime(DateTime.now().year, 12, 31)));
+  final _fechaFin = TextEditingController();
   String? _direccionSeleccionada;
   final _notas = TextEditingController();
-  
+
+  File? _postMortemFile;
+
   final List<String> _direcciones = [
     'Dirección General',
     'Dirección de Recursos Humanos',
@@ -50,6 +59,54 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
   TimeOfDay _hora = const TimeOfDay(hour: 10, minute: 0);
   bool _saving = false;
   int _currentStep = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _buscarPrimerHorarioDisponible();
+  }
+
+  Future<void> _buscarPrimerHorarioDisponible() async {
+    final db = ref.read(databaseProvider);
+    final cfgRows = await db.select(db.configuracion).get();
+    final cfg = {for (final r in cfgRows) r.clave: r.valor};
+    
+    final intervalo = int.tryParse(cfg['intervalo_minutos'] ?? '30') ?? 30;
+    final maxCitas = int.tryParse(cfg['max_citas_por_hora'] ?? '2') ?? 2;
+    
+    // Empezar desde mañana a las 9:00
+    var temp = DateTime.now().add(const Duration(days: 1));
+    temp = DateTime(temp.year, temp.month, temp.day, 9, 0, 0);
+
+    // Buscar en los próximos 7 días
+    for (int dia = 0; dia < 7; dia++) {
+      var horaTemp = DateTime(temp.year, temp.month, temp.day + dia, 9, 0, 0);
+      
+      while (horaTemp.hour < 16) {
+        final inicioBloque = horaTemp.millisecondsSinceEpoch ~/ 1000;
+        final finBloque = horaTemp.add(Duration(minutes: intervalo)).millisecondsSinceEpoch ~/ 1000;
+        
+        final citasEnBloque = await (db.select(db.citas)
+              ..where((t) => 
+                  t.fechaHoraFirma.isBiggerOrEqualValue(inicioBloque) &
+                  t.fechaHoraFirma.isSmallerThanValue(finBloque) &
+                  t.isDelete.equals(false) &
+                  t.estado.equals('CANCELADA').not()))
+            .get();
+            
+        if (citasEnBloque.length < maxCitas) {
+          if (mounted) {
+            setState(() {
+              _fecha = horaTemp;
+              _hora = TimeOfDay(hour: horaTemp.hour, minute: horaTemp.minute);
+            });
+          }
+          return;
+        }
+        horaTemp = horaTemp.add(Duration(minutes: intervalo));
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -102,7 +159,6 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
     if (picked != null) {
       setState(() {
         _fechaInicio.text = DateFormat('dd/MM/yyyy').format(picked);
-        // Auto-completar la fecha fin con el 31 de diciembre del mismo año
         final finDeAnio = DateTime(picked.year, 12, 31);
         _fechaFin.text = DateFormat('dd/MM/yyyy').format(finDeAnio);
       });
@@ -113,7 +169,7 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
     final picked = await showDatePicker(
       context: context,
       locale: const Locale('es', 'ES'),
-      initialDate: DateTime.now(), // O el 31 de dic del año actual
+      initialDate: DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
@@ -132,6 +188,47 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
     }
   }
 
+  Future<void> _mostrarDialogoHorarios(Map<String, dynamic> result) async {
+    final sugerencias = result['sugerencias'] as List<DateTime>;
+    final nombres = (result['nombres'] as List<String>).join(', ');
+    
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Horario no disponible'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Ya hay $nombres agendados en este bloque.'),
+            const SizedBox(height: 16),
+            const Text('Seleccione un horario disponible:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: sugerencias.map((d) {
+                return ActionChip(
+                  label: Text('${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}'),
+                  onPressed: () {
+                    setState(() {
+                      _fecha = d;
+                      _hora = TimeOfDay(hour: d.hour, minute: d.minute);
+                    });
+                    Navigator.pop(ctx);
+                  },
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+        ],
+      ),
+    );
+  }
+
   Future<void> _guardar() async {
     final auth = ref.read(authProvider);
     if (auth.userId == null) {
@@ -139,12 +236,27 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
       return;
     }
     setState(() => _saving = true);
+
     try {
       final dt = DateTime(_fecha.year, _fecha.month, _fecha.day, _hora.hour, _hora.minute);
       final repo = ref.read(citasRepositoryProvider);
-      await repo.hayDisponibilidad(dt);
+      
+      // 1. Validar disponibilidad
+      final dispResult = await repo.hayDisponibilidad(dt);
+      if (dispResult['disponible'] == false) {
+        if (!mounted) return;
+        setState(() => _saving = false);
+        
+        if (dispResult.containsKey('sugerencias') && (dispResult['sugerencias'] as List).isNotEmpty) {
+          await _mostrarDialogoHorarios(dispResult);
+        } else {
+          await AppDialogs.error(context, dispResult['error'] ?? 'No hay disponibilidad.');
+        }
+        return;
+      }
 
-      await repo.crear(
+      // 2. Crear la cita
+      final citaId = await repo.crear(
         personaNombre: _nombre.text.trim(),
         personaCorreo: _correo.text.trim(),
         fechaHoraFirma: dt,
@@ -160,16 +272,58 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
         fechaInicio: _fechaInicio.text.trim().isEmpty ? null : _fechaInicio.text.trim(),
         fechaFin: _fechaFin.text.trim().isEmpty ? null : _fechaFin.text.trim(),
       );
+
+      if (!mounted) return;
+
+      // 3. Subir el Post Mortem si se seleccionó
+      int? postMortemId;
+      if (_postMortemFile != null) {
+        final docsRepo = ref.read(documentosRepositoryProvider);
+        postMortemId = await docsRepo.subirDocumento(
+          citaId: citaId,
+          tipo: DocumentoTipo.postMortemEscaneo,
+          archivo: _postMortemFile!,
+          userId: auth.userId!,
+        );
+      }
+
+      // 4. Esperar a que el Post Mortem esté en la DB y encolar el correo
+      await repo.esperarYEncolarCorreo(citaId, postMortemDocId: postMortemId);
+
+      // 5. Polling para esperar a que el correo se envíe
+      final db = ref.read(databaseProvider);
+      bool enviado = false;
+      int intentos = 0;
       
-      if (!mounted) return;
-      await AppDialogs.success(context, 'Cita creada correctamente.');
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
+      while (!enviado && intentos < 15) {
+        await Future.delayed(const Duration(seconds: 2));
+        
+        final correo = await (db.select(db.correosLog)
+              ..where((t) => t.citaId.equals(citaId) & t.tipo.equals('prueba'))
+              ..orderBy([(t) => OrderingTerm.desc(t.id)])..limit(1))
+            .getSingleOrNull();
+            
+        if (correo != null && correo.estado == 'enviado') {
+          enviado = true;
+          if (mounted) {
+            setState(() => _saving = false);
+            await AppDialogs.success(context, 'Cita creada y correo de confirmación enviado correctamente.');
+            if (mounted) Navigator.of(context).pop(true);
+          }
+        }
+        intentos++;
+      }
+      
+      if (!enviado && mounted) {
+        setState(() => _saving = false);
+        await AppDialogs.error(context, 'La cita se creó, pero el correo está en cola. Revisa la pestaña de Ajustes > Cola de Correos.');
+        if (mounted) Navigator.of(context).pop(true);
+      }
+
     } catch (e) {
       if (!mounted) return;
+      setState(() => _saving = false);
       await AppDialogs.error(context, 'No se pudo crear la cita: $e');
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -180,7 +334,7 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
       backgroundColor: Colors.transparent,
       child: Container(
         width: 750,
-        constraints: const BoxConstraints(maxHeight: 850),
+        constraints: const BoxConstraints(maxHeight: 950),
         decoration: BoxDecoration(
           color: const Color(0xFFF8F9FA),
           borderRadius: BorderRadius.circular(20),
@@ -250,6 +404,9 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
                             onPickFechaInicio: _pickFechaInicio,
                             onPickFechaFin: _pickFechaFin,
                             direcciones: _direcciones,
+                            postMortemFile: _postMortemFile,
+                            onPostMortemDropped: (path) => setState(() => _postMortemFile = File(path)),
+                            onPostMortemDeleted: () => setState(() => _postMortemFile = null),
                           )
                         : _currentStep == 1
                             ? _Paso2(formKey: _formKey2, correo: _correo, fecha: _fecha, hora: _hora, onPickFecha: _pickFecha, onPickHora: _pickHora)
@@ -301,7 +458,7 @@ class _NuevaCitaDialogState extends ConsumerState<NuevaCitaDialog> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                         icon: _saving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const FaIcon(FontAwesomeIcons.check, size: 14),
-                        label: const Text('Guardar Cita'),
+                        label: Text(_saving ? 'Creando y enviando...' : 'Guardar Cita'),
                         onPressed: _saving ? null : _guardar,
                       ),
                   ],
@@ -365,6 +522,9 @@ class _Paso1 extends StatelessWidget {
   final List<String> direcciones;
   final VoidCallback onPickFechaInicio;
   final VoidCallback onPickFechaFin;
+  final File? postMortemFile;
+  final Function(String) onPostMortemDropped;
+  final VoidCallback onPostMortemDeleted;
 
   const _Paso1({
     required this.formKey,
@@ -382,6 +542,9 @@ class _Paso1 extends StatelessWidget {
     required this.direcciones,
     required this.onPickFechaInicio,
     required this.onPickFechaFin,
+    required this.postMortemFile,
+    required this.onPostMortemDropped,
+    required this.onPostMortemDeleted,
   });
 
   @override
@@ -408,10 +571,12 @@ class _Paso1 extends StatelessWidget {
                       controller: dpi,
                       keyboardType: TextInputType.number,
                       maxLength: 13,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: _inputDecoration('DPI (13 dígitos) *', FontAwesomeIcons.idCard, counterText: ''),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Requerido';
                         if (v.trim().length != 13) return 'Debe ser 13 dígitos';
+                        if (int.tryParse(v.trim()) == null) return 'Solo se permiten números';
                         return null;
                       },
                     ),
@@ -422,16 +587,54 @@ class _Paso1 extends StatelessWidget {
                       controller: telefono,
                       keyboardType: TextInputType.phone,
                       maxLength: 8,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: _inputDecoration('Teléfono (8 dígitos) *', FontAwesomeIcons.phone, counterText: ''),
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) return 'Requerido';
                         if (v.trim().length != 8) return 'Debe ser 8 dígitos';
+                        if (int.tryParse(v.trim()) == null) return 'Solo se permiten números';
                         return null;
                       },
                     ),
                   ),
                 ],
               ),
+            ],
+          ),
+          
+          const SizedBox(height: AppSizes.lg),
+
+          // POST MORTEM
+          _SectionCard(
+            title: 'Documento Post Mortem',
+            icon: FontAwesomeIcons.fileMedical,
+            children: [
+              const Text('Suba el Post Mortem autenticado por su abogado.', style: TextStyle(color: Colors.grey, fontSize: 13)),
+              const SizedBox(height: AppSizes.md),
+              if (postMortemFile == null)
+                DropZone(
+                  titulo: 'Arrastra aquí el Post Mortem',
+                  subtitulo: 'O haz clic para buscarlo. (PDF)',
+                  icono: FontAwesomeIcons.cloudArrowUp,
+                  onFileDropped: onPostMortemDropped,
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(AppSizes.md),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const FaIcon(FontAwesomeIcons.circleCheck, color: Colors.green),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(postMortemFile!.path.split('/').last, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))),
+                      IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: onPostMortemDeleted),
+                    ],
+                  ),
+                ),
             ],
           ),
           
@@ -446,14 +649,26 @@ class _Paso1 extends StatelessWidget {
                   Expanded(
                     child: TextFormField(
                       controller: contrato,
-                      decoration: _inputDecoration('No. de Contrato', FontAwesomeIcons.fileContract),
+                      decoration: _inputDecoration('No. de Contrato *', FontAwesomeIcons.fileContract),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'[0-9-]')),
+                      ],
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Requerido';
+                        final regex = RegExp(r'^\d{1,4}-\d{4}$');
+                        if (!regex.hasMatch(v.trim())) {
+                          return 'Formato: 0000-YYYY (ej. 1-2026)';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const SizedBox(width: AppSizes.md),
                   Expanded(
                     child: TextFormField(
                       controller: puesto,
-                      decoration: _inputDecoration('Puesto', FontAwesomeIcons.briefcase),
+                      decoration: _inputDecoration('Puesto *', FontAwesomeIcons.briefcase),
+                      validator: (v) => v!.trim().isEmpty ? 'Requerido' : null,
                     ),
                   ),
                 ],
@@ -464,7 +679,8 @@ class _Paso1 extends StatelessWidget {
                   Expanded(
                     child: TextFormField(
                       controller: salario,
-                      decoration: _inputDecoration('Salario / Honorarios', FontAwesomeIcons.moneyBill),
+                      decoration: _inputDecoration('Salario / Honorarios *', FontAwesomeIcons.moneyBill),
+                      validator: (v) => v!.trim().isEmpty ? 'Requerido' : null,
                     ),
                   ),
                   const SizedBox(width: AppSizes.md),
@@ -472,9 +688,10 @@ class _Paso1 extends StatelessWidget {
                     child: DropdownButtonFormField<String>(
                       initialValue: direccionSeleccionada,
                       isExpanded: true,
-                      decoration: _inputDecoration('Dirección Asignada', FontAwesomeIcons.building),
+                      decoration: _inputDecoration('Dirección Asignada *', FontAwesomeIcons.building),
                       items: direcciones.map((dir) => DropdownMenuItem(value: dir, child: Text(dir, overflow: TextOverflow.ellipsis))).toList(),
                       onChanged: onDireccionChanged,
+                      validator: (v) => v == null ? 'Requerido' : null,
                     ),
                   ),
                 ],
@@ -492,8 +709,9 @@ class _Paso1 extends StatelessWidget {
                     child: TextFormField(
                       controller: fechaInicio,
                       readOnly: true,
-                      decoration: _inputDecoration('Fecha de Inicio', FontAwesomeIcons.calendarDays),
+                      decoration: _inputDecoration('Fecha de Inicio *', FontAwesomeIcons.calendarDays),
                       onTap: onPickFechaInicio,
+                      validator: (v) => v!.trim().isEmpty ? 'Requerido' : null,
                     ),
                   ),
                   const SizedBox(width: AppSizes.md),
@@ -501,8 +719,9 @@ class _Paso1 extends StatelessWidget {
                     child: TextFormField(
                       controller: fechaFin,
                       readOnly: true,
-                      decoration: _inputDecoration('Fecha de Fin', FontAwesomeIcons.calendarDays),
+                      decoration: _inputDecoration('Fecha de Fin *', FontAwesomeIcons.calendarDays),
                       onTap: onPickFechaFin,
+                      validator: (v) => v!.trim().isEmpty ? 'Requerido' : null,
                     ),
                   ),
                 ],

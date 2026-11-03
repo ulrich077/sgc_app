@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,13 +45,33 @@ class DocumentosRepository {
     required int userId,
   }) async {
     final bytes = await archivo.readAsBytes();
-    return subirBytes(
+    final id = await subirBytes(
       citaId: citaId,
       tipo: tipo,
       bytes: bytes,
       nombreArchivo: archivo.uri.pathSegments.last,
       userId: userId,
     );
+    
+    // Esperar a que el documento esté disponible en el stream (confirma el insert)
+    final completer = Completer<void>();
+    final sub = (_db.select(_db.documentos)
+          ..where((t) => t.id.equals(id) & t.isDelete.equals(false))
+          ..limit(1))
+        .watch()
+        .listen((docs) {
+      if (docs.isNotEmpty && !completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    
+    try {
+      await completer.future.timeout(const Duration(seconds: 5));
+    } finally {
+      await sub.cancel();
+    }
+    
+    return id;
   }
 
   Future<int> subirBytes({
