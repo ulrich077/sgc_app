@@ -83,12 +83,18 @@ class _DropZoneState extends State<DropZone> {
       ),
       child: Column(
         children: [
-          // Usamos FaIcon en lugar de Icon para aceptar ambos tipos
-          FaIcon(
-            _isDragging ? FontAwesomeIcons.download : widget.icono,
-            size: 48,
-            color: _isDragging ? AppColors.primary : AppColors.textSecondary,
-          ),
+          // Si el ícono es FaIconData, usamos FaIcon. Si es IconData, usamos Icon.
+          widget.icono is FaIconData
+              ? FaIcon(
+                  _isDragging ? FontAwesomeIcons.download : widget.icono as FaIconData,
+                  size: 48,
+                  color: _isDragging ? AppColors.primary : AppColors.textSecondary,
+                )
+              : Icon(
+                  _isDragging ? Icons.download_done : widget.icono as IconData,
+                  size: 48,
+                  color: _isDragging ? AppColors.primary : AppColors.textSecondary,
+                ),
           const SizedBox(height: AppSizes.md),
           Text(
             _isDragging ? '¡Suelta el archivo aquí!' : widget.titulo,
