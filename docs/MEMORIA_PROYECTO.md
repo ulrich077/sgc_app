@@ -137,3 +137,106 @@ FIN DE LA MEMORIA
 ---
 
 FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 15. CONFIRMACIÓN DE CORREO CON DESTINATARIO PREDEFINIDO (2026-11-02)
+
+### 15.1. Mailto con Destinatario
+- El botón "Confirmar Recibido" del correo de prueba ahora usa un `mailto:` que incluye el `{{correo_remitente}}` como destinatario.
+- Al hacer clic, el cliente de correo del firmante se abre con:
+  - **Para**: El correo desde donde se envió la confirmación.
+  - **Asunto**: "Confirmación de Cita - [Nombre]".
+  - **Cuerpo**: "Hola, confirmo que he recibido el correo y llevaré mis documentos para mi cita del día [fecha] a las [hora]".
+
+### 15.2. Reemplazo del Placeholder
+- Se actualizó `EmailDispatcher` para reemplazar `{{correo_remitente}}` en el cuerpo del correo usando el valor de `config['correo_remitente']`.
+
+---
+
+FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 16. DASHBOARD: RESUMEN, PAGINACIÓN Y WATCH AGENDADAS (2026-11-02)
+
+### 16.1. Método `watchTotalAgendadas`
+- Se agregó a `CitasRepository` un Stream que cuenta todas las citas agendadas (excluyendo Canceladas y Cerradas).
+- Este Stream alimenta la nueva Card de Resumen en el Dashboard.
+
+### 16.2. Card de Resumen
+- Se agregó una Card entre los KPIs y el calendario/citas.
+- Muestra 3 filas con íconos y colores:
+  - **Agendados** (azul): usa `watchTotalAgendadas`.
+  - **Terminados** (verde): usa `watchTotalPorEstado(CitaEstado.cerrada)`.
+  - **Reagendados** (naranja): usa `watchTotalPorEstado(CitaEstado.reagendada)`.
+- Cada fila es reactiva y muestra el conteo en tiempo real.
+
+### 16.3. Paginación en el Panel de Citas del Día
+- Se agregaron variables de estado `_page` y `_pageSize = 5`.
+- El panel de "Citas para el día" ahora muestra solo 5 citas por página.
+- Se agregaron botones de **Anterior / Siguiente** y el indicador **"Pág. X de Y"**.
+- Al cambiar de día, la paginación se reinicia a 0.
+
+---
+
+FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 17. GRÁFICA DE ACTIVIDAD EN EL DASHBOARD (2026-11-02)
+
+### 17.1. Paquete Utilizado
+- **`fl_chart`** (versión instalada con `flutter pub add fl_chart`).
+- Es el estándar de la industria para gráficas en Flutter. Permite gráficas de líneas, barras, pastel, etc., con animaciones y tooltips.
+- Importación: `import 'package:fl_chart/fl_chart.dart';`
+
+### 17.2. Estructura de la Gráfica (`_LineChartCard`)
+Se creó una tarjeta (`_LineChartCard`) que se coloca entre los KPIs y el calendario.
+- **Título**: "Actividad de Citas".
+- **Subtítulo**: "Tendencia de los últimos 5 días y próximos 5 días".
+- **Leyenda**: 3 ítems (Agendados, Terminados, Reagendados) con colores azul, verde y naranja.
+- **Rango de datos**: 
+  - Se calculan 11 días en total (5 días antes de hoy y 5 días después).
+  - Se agrupan las citas por día usando `fechaHoraFirma` (convertido a segundos).
+  - Se generan 3 listas de `FlSpot` (puntos X, Y) para cada serie:
+    - **Agendados** (azul): citas cuyo estado no es `CANCELADA` ni `CERRADA`.
+    - **Terminados** (verde): citas en estado `CERRADA`.
+    - **Reagendados** (naranja): citas en estado `REAGENDADA`.
+
+### 17.3. Configuración de `LineChartData`
+- **Cuadrícula (`FlGridData`)**: 
+  - Líneas verticales y horizontales en gris suave (`Colors.grey.shade200`).
+  - `horizontalInterval` e `verticalInterval` calculados dinámicamente.
+- **Títulos (`FlTitlesData`)**:
+  - **Eje Y (izquierda)**: Muestra números enteros. El intervalo se calcula dividiendo el valor máximo entre 5.
+  - **Eje X (abajo)**: Muestra la fecha en formato `d MMM` (ej. "3 nov"). Se muestra cada 2 días para no saturar.
+- **Bordes (`FlBorderData`)**: Solo se muestran los bordes izquierdo y inferior (estilo Chart.js).
+- **Escala Dinámica**:
+  - Se calcula el valor máximo (`maxValor`) entre las 3 series.
+  - Se define `maxY = maxValor + 2` (con un mínimo de 5) para dar margen.
+  - Se define `intervaloY = (maxY / 5).ceilToDouble()` para que el eje Y tenga 5 divisiones limpias.
+- **Tooltips (`LineTouchData`)**:
+  - Al tocar un punto, muestra un tooltip con el valor (ej. "5 citas") y el color de la línea.
+
+### 17.4. Series de Datos (`LineChartBarData`)
+Cada serie tiene:
+- `spots`: Lista de `FlSpot`.
+- `isCurved: true`: Línea curva (suavizada).
+- `color`: Azul, verde o naranja.
+- `barWidth: 3`: Grosor de la línea.
+- `isStrokeCapRound: true`: Extremos redondeados.
+- `dotData: FlDotData(show: true)`: Muestra puntos en cada dato.
+- `belowBarData: BarAreaData(show: false)`: Sin relleno debajo de la línea (para no saturar).
+
+### 17.5. Problemas Resueltos
+| Problema | Solución |
+|---|---|
+| La gráfica se desbordaba | Se calculó `maxY` dinámicamente y se ajustó `intervaloY`. |
+| Se repetían los días (martes, miércoles, etc.) | Se generó una lista fija de 11 días (5 antes, 5 después) y se agrupó por fecha exacta. |
+| Los datos no se veían claros | Se agregó leyenda, tooltips y cuadrícula visible. |
+| `maxY` fijo en 10 | Se cambió a `(maxValor + 2).ceilToDouble()`. |
+
+---
+
+FIN DE LA ACTUALIZACIÓN

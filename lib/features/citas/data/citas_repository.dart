@@ -415,6 +415,16 @@ class CitasRepository {
     );
   }
 
+  Stream<int> watchTotalAgendadas() {
+    return (_db.select(_db.citas)
+          ..where((t) => 
+              t.isDelete.equals(false) &
+              t.estado.equals(CitaEstado.cancelada.dbValue).not() &
+              t.estado.equals(CitaEstado.cerrada.dbValue).not()))
+        .watch()
+        .map((r) => r.length);
+  }
+
   Stream<int> watchVencidas() {
     final ahoraSegundos = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     return (_db.select(_db.citas)

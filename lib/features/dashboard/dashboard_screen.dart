@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -23,6 +24,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   DateTime? _selectedDay;
   List<Cita> _citasDelDia = [];
   bool _loadingDia = false;
+  
+  // Paginación
+  int _page = 0;
+  static const int _pageSize = 5;
+  
+  // Filtro de gráfica
 
   @override
   void initState() {
@@ -31,8 +38,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _cargarCitasDelDia(_selectedDay!);
   }
 
-  Future<void> _cargarCitasDelDia(DateTime dia) async {
-    setState(() => _loadingDia = true);
+  Future<void> _cargarCitasDelDia(DateTime dia, {String? filtroTipo}) async {
+    setState(() {
+      _loadingDia = true;
+      _page = 0;
+    });
     final repo = ref.read(citasRepositoryProvider);
     
     final inicio = DateTime(dia.year, dia.month, dia.day, 0, 0, 0);
@@ -41,7 +51,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final citas = await repo.obtenerCitasPorFecha(inicio, fin);
     if (mounted) {
       setState(() {
-        _citasDelDia = citas;
+        if (filtroTipo == 'agendados') {
+          _citasDelDia = citas.where((c) => c.estado != 'CANCELADA' && c.estado != 'CERRADA').toList();
+        } else if (filtroTipo == 'terminados') {
+          _citasDelDia = citas.where((c) => c.estado == 'CERRADA').toList();
+        } else if (filtroTipo == 'reagendados') {
+          _citasDelDia = citas.where((c) => c.estado == 'REAGENDADA').toList();
+        } else {
+          _citasDelDia = citas;
+        }
         _loadingDia = false;
       });
     }
@@ -138,6 +156,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 );
               },
             ),
+
+            // GRÁFICA DE LÍNEAS (Actividad de Citas)
+            _LineChartCard(
+              repo: repo,
+              onPuntoSeleccionado: (fecha, tipo) {
+                _cargarCitasDelDia(fecha, filtroTipo: tipo);
+                setState(() {
+                  _selectedDay = fecha;
+                  _focusedDay = fecha;
+                });
+              },
+            ),
+            const SizedBox(height: AppSizes.xl),
 
             // CONTENIDO PRINCIPAL
             LayoutBuilder(
@@ -247,6 +278,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     final fechaStr = DateFormat.yMMMMEEEEd('es').format(_selectedDay!);
     
+    // Calcular las citas de la página actual
+    final totalPages = (_citasDelDia.length / _pageSize).ceil();
+    final startIndex = _page * _pageSize;
+    final endIndex = (startIndex + _pageSize).clamp(0, _citasDelDia.length);
+    final citasPagina = _citasDelDia.sublist(startIndex, endIndex);
+
     return Container(
       padding: const EdgeInsets.all(AppSizes.xl),
       decoration: BoxDecoration(
@@ -307,14 +344,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
             )
-          else
+          else ...[
+            // Lista de citas paginada
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _citasDelDia.length,
+              itemCount: citasPagina.length,
               separatorBuilder: (_, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
-                final cita = _citasDelDia[index];
+                final cita = citasPagina[index];
                 final estado = CitaEstado.fromDb(cita.estado);
                 final hora = DateTime.fromMillisecondsSinceEpoch(cita.fechaHoraFirma * 1000);
                 final esCancelada = estado == CitaEstado.cancelada;
@@ -333,7 +371,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     child: Row(
                       children: [
-                        // Hora
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
@@ -357,7 +394,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        // Info
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -385,7 +421,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ],
                           ),
                         ),
-                        // Flecha indicativa
                         const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textSecondary),
                       ],
                     ),
@@ -393,8 +428,262 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 );
               },
             ),
+            
+            // Controles de paginación
+            if (totalPages > 1) ...[
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: _page > 0 ? () => setState(() => _page--) : null,
+                  ),
+                  Text('Pág. ${_page + 1} de $totalPages'),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: _page < totalPages - 1 ? () => setState(() => _page++) : null,
+                  ),
+                ],
+              ),
+            ],
+          ],
         ],
       ),
+    );
+  }
+}
+
+
+class _LineChartCard extends ConsumerWidget {
+  final CitasRepository repo;
+  final void Function(DateTime fecha, String tipo) onPuntoSeleccionado;
+
+  const _LineChartCard({required this.repo, required this.onPuntoSeleccionado});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      padding: const EdgeInsets.all(AppSizes.xl),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Actividad de Citas',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tendencia de los últimos 5 días y próximos 5 días',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: AppSizes.lg),
+          
+          // LEYENDA (Estilo Chart.js)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildLegendItem('Agendados', Colors.blue),
+              const SizedBox(width: 20),
+              _buildLegendItem('Terminados', Colors.green),
+              const SizedBox(width: 20),
+              _buildLegendItem('Reagendados', Colors.orange),
+            ],
+          ),
+          const SizedBox(height: AppSizes.xl),
+          
+          // GRÁFICA
+          SizedBox(
+            height: 250,
+            child: StreamBuilder<List<Cita>>(
+              stream: repo.watchTodas(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final citas = snapshot.data!;
+                
+                // Rango: 5 días antes y 5 después
+                final hoy = DateTime.now();
+                final inicioRango = hoy.subtract(const Duration(days: 5));
+                final finRango = hoy.add(const Duration(days: 5));
+                
+                final dias = <DateTime>[];
+                var temp = DateTime(inicioRango.year, inicioRango.month, inicioRango.day);
+                while (temp.isBefore(finRango.add(const Duration(days: 1)))) {
+                  dias.add(temp);
+                  temp = temp.add(const Duration(days: 1));
+                }
+
+                final agendados = <FlSpot>[];
+                final terminados = <FlSpot>[];
+                final reagendados = <FlSpot>[];
+                
+                for (int i = 0; i < dias.length; i++) {
+                  final dia = dias[i];
+                  final inicioDia = DateTime(dia.year, dia.month, dia.day, 0, 0, 0).millisecondsSinceEpoch ~/ 1000;
+                  final finDia = DateTime(dia.year, dia.month, dia.day, 23, 59, 59).millisecondsSinceEpoch ~/ 1000;
+                  
+                  final citasDia = citas.where((c) => c.fechaHoraFirma >= inicioDia && c.fechaHoraFirma <= finDia);
+                  
+                  agendados.add(FlSpot(i.toDouble(), citasDia.where((c) => c.estado != 'CANCELADA' && c.estado != 'CERRADA').length.toDouble()));
+                  terminados.add(FlSpot(i.toDouble(), citasDia.where((c) => c.estado == 'CERRADA').length.toDouble()));
+                  reagendados.add(FlSpot(i.toDouble(), citasDia.where((c) => c.estado == 'REAGENDADA').length.toDouble()));
+                }
+
+                // Calcular el máximo valor de las 3 series para el maxY
+                final maxValor = [
+                  ...agendados.map((s) => s.y),
+                  ...terminados.map((s) => s.y),
+                  ...reagendados.map((s) => s.y),
+                ].reduce((a, b) => a > b ? a : b);
+                
+                // Redondear hacia arriba para dar margen (mínimo 5)
+                final maxY = (maxValor + 2).ceilToDouble().clamp(5.0, double.infinity);
+                final intervaloY = (maxY / 5).ceilToDouble();
+
+                return LineChart(
+                  LineChartData(
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: true,
+                      horizontalInterval: intervaloY,
+                      verticalInterval: 1,
+                      getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.shade200, strokeWidth: 1),
+                      getDrawingVerticalLine: (value) => FlLine(color: Colors.grey.shade200, strokeWidth: 1),
+                    ),
+                    titlesData: FlTitlesData(
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 30,
+                          interval: intervaloY,
+                          getTitlesWidget: (value, meta) {
+                            return Text(
+                              value.toInt().toString(),
+                              style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                            );
+                          },
+                        ),
+                      ),
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          interval: 2,
+                          getTitlesWidget: (value, meta) {
+                            final index = value.toInt();
+                            if (index >= 0 && index < dias.length) {
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  DateFormat('d MMM', 'es').format(dias[index]),
+                                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+                                ),
+                              );
+                            }
+                            return const Text('');
+                          },
+                        ),
+                      ),
+                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    borderData: FlBorderData(
+                      show: true,
+                      border: Border(
+                        left: BorderSide(color: Colors.grey.shade300),
+                        bottom: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                    minX: 0,
+                    maxX: (dias.length - 1).toDouble(),
+                    minY: 0,
+                    maxY: maxY,
+                    lineTouchData: LineTouchData(
+                      touchCallback: (FlTouchEvent event, LineTouchResponse? touchResponse) {
+                        if (event is FlTapUpEvent && touchResponse != null && touchResponse.lineBarSpots != null && touchResponse.lineBarSpots!.isNotEmpty) {
+                          final spot = touchResponse.lineBarSpots!.first;
+                          final index = spot.x.toInt();
+                          if (index >= 0 && index < dias.length) {
+                            final fechaSeleccionada = dias[index];
+                            
+                            String tipo = 'agendados';
+                            if (spot.barIndex == 1) tipo = 'terminados';
+                            if (spot.barIndex == 2) tipo = 'reagendados';
+                            
+                            // Llamar al callback del padre
+                            onPuntoSeleccionado(fechaSeleccionada, tipo);
+                          }
+                        }
+                      },
+                      touchTooltipData: LineTouchTooltipData(
+                        getTooltipItems: (touchedSpots) {
+                          return touchedSpots.map((spot) {
+                            return LineTooltipItem(
+                              '${spot.y.toInt()} citas',
+                              TextStyle(color: spot.bar.color, fontWeight: FontWeight.bold),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: agendados,
+                        isCurved: true,
+                        color: Colors.blue,
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: true),
+                        belowBarData: BarAreaData(show: false),
+                      ),
+                      LineChartBarData(
+                        spots: terminados,
+                        isCurved: true,
+                        color: Colors.green,
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: true),
+                        belowBarData: BarAreaData(show: false),
+                      ),
+                      LineChartBarData(
+                        spots: reagendados,
+                        isCurved: true,
+                        color: Colors.orange,
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: true),
+                        belowBarData: BarAreaData(show: false),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 16,
+          height: 10,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }
