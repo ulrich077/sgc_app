@@ -116,3 +116,24 @@ Estado: Fase 2.15 (Flujo de Citas, Contraloría, Correos y Reactividad)
 ---
 
 FIN DE LA MEMORIA
+
+---
+
+## 14. ADJUNTO DE POST MORTEM Y VALIDACIONES FINALES (2026-11-02)
+
+### 14.1. Adjunto del Post Mortem (Fix Definitivo)
+- **Problema:** El correo se enviaba sin el Post Mortem porque el ID del documento no se pasaba correctamente.
+- **Solución:** En `nueva_cita_dialog.dart`, ahora se captura el `id` que retorna `subirDocumento` y se pasa a `esperarYEncolarCorreo(citaId, postMortemDocId: postMortemId)`.
+- El `CitasRepository` ahora busca el documento por `id` (no por tipo), lo que garantiza que se adjunte el archivo correcto.
+
+### 14.2. Validación del No. de Contrato
+- Se agregó un `FilteringTextInputFormatter` que solo permite números y guiones.
+- Se agregó un `validator` con el regex `^\d{1,4}-\d{4}$` (ej. `1-2026`, `1001-2026`).
+
+### 14.3. Validación de DPI y Teléfono
+- Se agregó `FilteringTextInputFormatter.digitsOnly` para bloquear letras.
+- Se agregaron validadores que verifican que el valor sea numérico.
+
+---
+
+FIN DE LA ACTUALIZACIÓN

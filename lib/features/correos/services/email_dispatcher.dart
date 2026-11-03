@@ -53,6 +53,7 @@ class EmailDispatcher {
     if (enlaceConfirmacion != null) {
       cuerpo = cuerpo.replaceAll('{{enlace_confirmacion}}', enlaceConfirmacion);
     }
+    cuerpo = cuerpo.replaceAll('{{correo_remitente}}', config['correo_remitente'] ?? '');
     return cuerpo;
   }
 

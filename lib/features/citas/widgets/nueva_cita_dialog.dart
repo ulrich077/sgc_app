@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../domain/catalogo_puestos.dart';
 import 'package:drift/drift.dart' hide Column;
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/constants/app_colors.dart';
@@ -547,6 +548,64 @@ class _Paso1 extends StatelessWidget {
     required this.onPostMortemDeleted,
   });
 
+  void _mostrarDialogoPuestos(BuildContext context, TextEditingController puestoCtrl, TextEditingController salarioCtrl) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        String search = '';
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final filtered = catalogoPuestos.where((p) =>
+              p.nombre.toLowerCase().contains(search.toLowerCase()) ||
+              p.codigo.toLowerCase().contains(search.toLowerCase())
+            ).toList();
+
+            return AlertDialog(
+              title: const Text('Seleccionar Puesto'),
+              content: SizedBox(
+                width: 500,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(
+                        hintText: 'Buscar por nombre o código...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) => setState(() => search = v),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, i) {
+                          final p = filtered[i];
+                          return ListTile(
+                            title: Text(p.nombre),
+                            subtitle: Text('Código: ${p.codigo} | Salario: ${p.salario}'),
+                            onTap: () {
+                              puestoCtrl.text = p.nombre;
+                              salarioCtrl.text = p.salario;
+                              Navigator.pop(ctx);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -665,10 +724,18 @@ class _Paso1 extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSizes.md),
                   Expanded(
-                    child: TextFormField(
-                      controller: puesto,
-                      decoration: _inputDecoration('Puesto *', FontAwesomeIcons.briefcase),
-                      validator: (v) => v!.trim().isEmpty ? 'Requerido' : null,
+                    child: InkWell(
+                      onTap: () => _mostrarDialogoPuestos(context, puesto, salario),
+                      child: InputDecorator(
+                        decoration: _inputDecoration('Puesto *', FontAwesomeIcons.briefcase),
+                        child: Text(
+                          puesto.text.isEmpty ? 'Seleccione un puesto' : puesto.text,
+                          style: TextStyle(
+                            color: puesto.text.isEmpty ? Colors.grey : Colors.black,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
