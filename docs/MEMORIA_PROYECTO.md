@@ -285,3 +285,512 @@ FIN DE LA ACTUALIZACIÓN
 ---
 
 FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 19. CONEXIÓN LAN, DESCUBRIMIENTO mDNS Y TLS (2026-11-02)
+
+### 19.1. Contexto
+Se trabajó en el Frente 1 (descubrimiento mDNS) y se planeó el Frente 2 (TLS autofirmado).
+La prueba real de LAN no fue posible porque el entorno era un hotspot de iPhone
+(AP isolation de iOS impide comunicación entre dispositivos). El código quedó listo
+para probarse en una LAN real (router del Congreso o cable Ethernet directo).
+
+### 19.2. Hallazgos de red
+- El servidor SÍ publica `_sgc._tcp` correctamente (`dns-sd -B` lo confirma).
+- `dns-sd -L SGC-Server _sgc._tcp local` muestra `interface 15` (Wi-Fi real, `172.20.10.3`).
+- `interface 1` era loopback (`127.0.0.1`), no `utun` de VPN (falsa alarma inicial).
+- **El hotspot de iPhone NO sirve para probar** (AP isolation). Probar en LAN real o cable directo.
+- En Windows sin Bonjour, mDNS falla en silencio. La IP manual es el fallback correcto.
+- En LAN corporativa, si hay "AP isolation" o multicast bloqueado, mDNS falla pero la IP manual funciona.
+
+### 19.3. Frente 1 — Descubrimiento mDNS endurecido (COMPLETADO)
+Archivos modificados:
+- **`lib/core/network/bonjour_helper.dart`** (NUEVO):
+  - `BonjourHelper.disponible()`: detecta si Bonjour está instalado en Windows vía
+    `Process.run('sc', ['query', 'Bonjour Service'])`. En macOS/Linux siempre `true`.
+  - `BonjourHelper.mensajeNoDisponible`: mensaje honesto para el usuario.
+- **`lib/core/network/mdns_discovery.dart`** (REESCRITO):
+  - Verifica `BonjourHelper.disponible()` antes de intentar `bonsoir`.
+  - Filtra IPs válidas de LAN (`_esIpDeLan`): solo acepta `10.x.x.x`, `172.16-31.x.x`, `192.168.x.x`.
+    Descarta `127.x`, `169.254.x`, IPv6.
+  - `_limpiarIp` quita sufijos `%en0` que a veces devuelve `bonsoir`.
+  - Timeout de 8s, limpieza correcta de stream y `discovery.stop()` en `finally`.
+  - Logs `debugPrint('[mDNS] ...')` para diagnóstico.
+- **`admin_settings_screen.dart`**:
+  - `_buscarServidor` usa `BonjourHelper.disponible()` y muestra mensaje honesto en Windows sin Bonjour.
+  - Import `bonjour_helper.dart` añadido.
+- **`flutter analyze`: No issues found!**
+
+### 19.4. Frente 2 — TLS autofirmado (PLANIFICADO, NO IMPLEMENTADO AÚN)
+Decisiones confirmadas:
+- **Opción B2**: certificado generado desde la app con `basic_utils` (no `openssl` del sistema,
+  para funcionar en Windows y macOS).
+- **Botón en `_NetworkPanel`** de `admin_settings_screen.dart`, solo visible para rol `administrador`
+  y solo si `es_servidor == true`.
+- **Cert guardado en** `getApplicationSupportDirectory()/certs/sgc_cert.pem` y `sgc_key.pem`
+  (no en `assets/`, que es solo lectura en runtime).
+- **SAN recomendado:** `['localhost', '127.0.0.1', <IP local detectada>]`.
+- **Si ya existe cert:** confirm de "¿Regenerarlo?" antes de sobrescribir.
+- **Diálogo de reinicio:** `AppDialogs.choose` con "Reiniciar ahora" / "Descartar".
+  El mensaje debe decir explícitamente que el admin deberá **abrir la app manualmente** desde el Dock/Launchpad.
+- **Cuenta regresiva de 5s** con spinner y texto:
+  *"La aplicación se cerrará en 5 segundos. ⚠️ Deberás abrirla manualmente de nuevo desde el Dock."*
+- **Cierre:** `await server.stop()` + `exit(0)`. No se usa `restart_app` porque falla en macOS sandboxed.
+- **Puerto:** cambia de `8080` a `8443`.
+- **`network_config.dart`:** `baseHttp` → `https://`, `baseWs` → `wss://`.
+- **`api_client.dart`:** `IOClient(HttpClient()..badCertificateCallback = (_, __, ___) => true)`.
+- **`sgc_server.dart`:** `SecurityContext` + `io.serve(handler, host, 8443, securityContext: ctx)`.
+  Fallback a HTTP en 8080 si el cert no existe (con warning en `stderr`).
+- **Pendiente de decidir:** el PDF de `acciones_tab.dart:99` (descarga interna con `IOClient` +
+  `open_file`, o navegador externo con warning de cert autofirmado).
+
+### 19.5. Código muerto identificado (NO BORRADO, tema aparte)
+- `{{enlace_confirmacion}}` en `app_database.dart:38 y :140` (plantilla por defecto).
+- `enlace` en `citas_repository.dart:185-187` (`http://ip:puerto/api/confirmar/$token`).
+- Endpoint `/api/confirmar/<token>` en `sgc_server.dart:319-330`.
+- `placeholder_resolver.dart:4, 16, 34` y `email_dispatcher.dart:53-54`.
+- **Contexto:** el código actual manda un **link HTTP en texto plano**, NO un `mailto:`.
+  El HTML con botón "Confirmar Recibido" que se revisó vino de un correo enviado manualmente
+  (probablemente desde Gmail, por el `class="m_..."`), NO del sistema.
+- **Decisión pendiente:** si implementar `mailto:` (Camino 1) o dejar el link HTTP (Camino 2).
+  En intranet pura, el link HTTP solo funciona si el firmante está dentro de la LAN del Congreso.
+
+### 19.6. Entorno de prueba
+- Hotspot iPhone: ❌ No sirve (AP isolation de iOS).
+- Router Wi-Fi normal: ✅ Funciona (si no hay AP isolation ni multicast bloqueado).
+- Cable Ethernet directo con IPs estáticas: ✅ Funciona.
+- LAN del Congreso: ✅ Debería funcionar (verificar con el admin de red que no haya AP isolation).
+
+### 19.7. Comandos útiles
+```bash
+# Ver si el servicio mDNS está publicado
+dns-sd -B _sgc._tcp local
+
+# Ver la IP que anuncia mDNS
+dns-sd -L SGC-Server _sgc._tcp local
+dns-sd -G v4 <hostname>.local
+
+# Verificar expiración del cert (cuando exista)
+openssl x509 -in assets/certs/sgc_cert.pem -noout -dates
+
+
+
+---
+
+## Notas para la próxima sesión
+
+Cuando retomes el Frente 2 (TLS), lo primero es:
+
+1. **Añadir `basic_utils`** a `pubspec.yaml`.
+2. **Crear `lib/core/network/cert_service.dart`** con la generación del cert.
+3. **Añadir el botón** en `_NetworkPanel` (solo admin, solo servidor).
+4. **Implementar el diálogo** con cuenta regresiva de 5s y aviso de "abrir manualmente".
+5. **Modificar `sgc_server.dart`** para leer el cert con `File` y usar `SecurityContext`.
+6. **Cambiar `network_config.dart`** a `https` + `wss` + puerto 8443.
+7. **Modificar `api_client.dart`** con `IOClient` + `badCertificateCallback`.
+8. **Decidir el PDF** (descarga interna vs navegador externo).
+9. **`flutter analyze` limpio**.
+
+**Regla I recordatorio:** el código actual manda un link HTTP, no un mailto. Eso contradice el diseño de "correo de vuelta" que mencionaste. Antes de tocar TLS, conviene decidir si se implementa el mailto (Camino 1) o se deja el link HTTP (Camino 2). Ese es un tema aparte que no bloquea TLS pero que quedó pendiente.
+
+---
+
+## 20. TLS AUTOFIRMADO — IMPLEMENTACIÓN (2026-11-03)
+
+### 20.1. Contexto
+Se retomó el Frente 2 (TLS) que había quedado planificado en la sesión anterior.
+El objetivo: que el servidor SGC corra en HTTPS (puerto 8443) y el cliente se conecte
+con `badCertificateCallback` para aceptar el certificado autofirmado.
+
+### 20.2. Decisiones confirmadas
+- **Librería:** `basic_utils` para generar el certificado en Dart puro (sin `openssl`
+  del sistema), porque el sistema debe funcionar en macOS y Windows.
+- **Versión:** `basic_utils: ^5.7.0` (NO `^5.8.2`). La 5.8.x entra en conflicto con
+  `excel ^4.0.6` porque ambas dependen de versiones incompatibles de `archive`
+  (`excel` → `archive ^3.6.1`, `basic_utils 5.8` → `archive ^4.0.2`).
+- **Ubicación del cert:** `getApplicationSupportDirectory()/certs/sgc_cert.pem` y `sgc_key.pem`.
+  No en `assets/` (solo lectura en runtime).
+- **Botón:** en `_NetworkPanel` de `admin_settings_screen.dart`, en una sección nueva,
+  visible solo si `isAdmin == true` y `es_servidor == true`.
+- **Diálogo de reinicio:** `AppDialogs.choose` con "Reiniciar ahora" / "Descartar".
+  El mensaje debe decir explícitamente que el admin deberá **abrir la app manualmente**
+  desde el Dock/Launchpad (porque `restart_app` falla en macOS sandboxed).
+- **Cuenta regresiva:** 5 segundos con spinner y texto:
+  *"La aplicación se cerrará en 5 segundos. ⚠️ Deberás abrirla manualmente de nuevo desde el Dock."*
+- **Cierre:** `await server.stop()` + `exit(0)`.
+- **Puerto:** `8080` → `8443`.
+- **Cliente HTTP:** `IOClient(HttpClient()..badCertificateCallback = (_, __, ___) => true)`.
+- **PDF:** ya estaba completado en sesión anterior, NO se toca.
+- **Mailto de confirmación:** tema aparte, NO se toca en esta sesión.
+
+### 20.3. Estado de la implementación (al cierre de esta sesión)
+
+| Paso | Archivo | Estado |
+|---|---|---|
+| 1 | `pubspec.yaml` — añadir `basic_utils` | ⚠️ Añadido como `^5.8.2`, **conflicto con `excel`**. Hay que bajar a `^5.7.0`. |
+| 2 | `lib/core/network/cert_service.dart` | ⚠️ Escrito pero **quedó corrupto** (se pegó el texto del marcador `[... el contenido ...]` en vez del código). Hay que reescribirlo con el bloque corregido. |
+| 3 | `lib/core/network/network_config.dart` | ❌ **No parcheado**. El Python abortó porque no encontró `String get baseHttp => 'http://$servidorIp:$puerto';`. Hay que ver el archivo real antes de parchear. |
+| 4 | `lib/core/network/api_client.dart` | ⏳ Pendiente. Falta ver `sed -n '1,40p'`. |
+| 5 | `lib/server/sgc_server.dart` | ⏳ Pendiente. Falta ver `sed -n '335,365p'`. |
+| 6 | `admin_settings_screen.dart` (botón) | ⏳ Pendiente. |
+| 7 | `flutter analyze` limpio | ❌ Pendiente. |
+
+### 20.4. Errores encontrados y su causa
+- **Conflicto de dependencias:** `basic_utils ^5.8.2` vs `excel ^4.0.6`.
+  - Causa: ambas dependen de `archive` en versiones incompatibles.
+  - Solución: bajar a `basic_utils: ^5.7.0`.
+- **`cert_service.dart` corrupto:** el archivo se escribió con el texto literal
+  `[... el contenido completo del cert_service.dart que te di antes ...]`.
+  - Causa: en el bloque de comandos se puso ese marcador en vez del código.
+  - Solución: reescribir el archivo con el código Dart real (bloque corregido en 20.5).
+- **`network_config.dart` no parcheado:** el Python no encontró el patrón `baseHttp`.
+  - Causa: el archivo ya tiene otra estructura (posiblemente `https` ya aplicado
+    o `baseHttp` con otro nombre/formato).
+  - Solución: ver `cat lib/core/network/network_config.dart` antes de parchear.
+- **`flutter analyze` con 18 errores:** todos derivados del `cert_service.dart` corrupto
+  y de `CertService` indefinido en `sgc_server.dart`.
+  - Solución: reescribir `cert_service.dart` con el código real.
+- **2 `info` de HTML en doc comments:** `Angle brackets will be interpreted as HTML`.
+  - Solución: quitar los `<Directory>` del doc comment o envolverlos en backticks.
+
+### 20.5. Bloque corregido de `cert_service.dart` (para reescribir)
+
+```dart
+import 'dart:io';
+import 'package:basic_utils/basic_utils.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+
+class CertService {
+  CertService._();
+
+  static const String _carpetaCerts = 'certs';
+  static const String _nombreCert = 'sgc_cert.pem';
+  static const String _nombreKey = 'sgc_key.pem';
+  static const int _diasValidez = 3650;
+
+  static Future<Directory> _carpeta() async {
+    final base = await getApplicationSupportDirectory();
+    final dir = Directory('${base.path}/$_carpetaCerts');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  static Future<bool> existe() async {
+    final dir = await _carpeta();
+    return File('${dir.path}/$_nombreCert').existsSync() &&
+        File('${dir.path}/$_nombreKey').existsSync();
+  }
+
+  static Future<String?> rutaCert() async {
+    final dir = await _carpeta();
+    final f = File('${dir.path}/$_nombreCert');
+    return f.existsSync() ? f.path : null;
+  }
+
+  static Future<String?> rutaKey() async {
+    final dir = await _carpeta();
+    final f = File('${dir.path}/$_nombreKey');
+    return f.existsSync() ? f.path : null;
+  }
+
+  static Future<void> generar() async {
+    final dir = await _carpeta();
+    final certFile = File('${dir.path}/$_nombreCert');
+    final keyFile = File('${dir.path}/$_nombreKey');
+
+    final keyPair = CryptoUtils.generateRSAKeyPair();
+    final privateKey = keyPair.privateKey as RSAPrivateKey;
+    final publicKey = keyPair.publicKey as RSAPublicKey;
+
+    final attrs = <String, String>{
+      'CN': 'SGC-Server',
+      'O': 'Congreso',
+      'C': 'GT',
+    };
+
+    final sans = <String>['localhost', '127.0.0.1'];
+    final ip = await _ipLan();
+    if (ip != null && !sans.contains(ip)) sans.add(ip);
+
+    final csr = X509Utils.generateRsaCsrPem(attrs, privateKey, publicKey, san: sans);
+    final certPem = X509Utils.generateSelfSignedCertificate(
+      privateKey, csr, _diasValidez, sans: sans,
+    );
+
+    await certFile.writeAsString(certPem);
+    await keyFile.writeAsString(CryptoUtils.encodeRSAPrivateKeyToPem(privateKey));
+
+    debugPrint('[CertService] Certificado generado en ${dir.path}');
+    debugPrint('[CertService] SANs: $sans');
+  }
+
+  static Future<void> borrar() async {
+    final dir = await _carpeta();
+    for (final f in [
+      File('${dir.path}/$_nombreCert'),
+      File('${dir.path}/$_nombreKey'),
+    ]) {
+      if (f.existsSync()) await f.delete();
+    }
+  }
+
+  static Future<String?> _ipLan() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLoopback: false,
+        includeLinkLocal: false,
+      );
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (_esIpDeLan(addr.address)) return addr.address;
+        }
+      }
+    } catch (e) {
+      debugPrint('[CertService] Error IP LAN: $e');
+    }
+    return null;
+  }
+
+  static bool _esIpDeLan(String ip) {
+    final p = ip.split('.');
+    if (p.length != 4) return false;
+    final nums = p.map(int.tryParse).toList();
+    if (nums.any((n) => n == null)) return false;
+    final a = nums[0]!, b = nums[1]!;
+    if (a == 10) return true;
+    if (a == 172 && b >= 16 && b <= 31) return true;
+    if (a == 192 && b == 168) return true;
+    return false;
+  }
+}
+
+
+---
+
+**Nota:** esta memoria refleja el estado **real** al cierre. No dice "completado" donde no lo está. La próxima sesión empieza con el checklist de 20.6.
+---
+
+## 20. TLS AUTOFIRMADO — IMPLEMENTADO (2026-11-03)
+
+### 20.1. Estado: COMPLETADO
+
+TLS autofirmado funcionando. `flutter analyze: No issues found!`.
+
+### 20.2. Archivos modificados
+
+- `pubspec.yaml`: `basic_utils: ^5.7.0` (NO 5.8.x, conflicto con `excel`).
+- `lib/core/network/cert_service.dart` (NUEVO): genera cert RSA-2048 con SAN
+  (localhost + 127.0.0.1 + IP LAN detectada). Métodos: `generar()`, `existe()`,
+  `rutaCert()`, `rutaKey()`, `info()`, `borrar()`.
+- `lib/core/network/network_config.dart`: `https` + `wss` + puerto 8443.
+- `lib/server/sgc_server.dart`: `SecurityContext` + `io.serve` en 8443.
+  Fallback a HTTP 8080 si no hay cert.
+- `lib/core/network/api_client.dart`: `IOClient(HttpClient()..badCertificateCallback = ...)`.
+- `lib/features/admin/admin_settings_screen.dart`:
+  - Sección "Certificado TLS" en `_NetworkPanel` (solo `auth.isAdmin`).
+  - Botón "Generar certificado TLS" con confirm si ya existe.
+  - Diálogo "Reiniciar ahora" / "Descartar" con aviso de abrir manualmente.
+  - Cuenta regresiva 5s con spinner.
+  - Tarjeta de estado con 4 TextField desactivados (Estado, Ruta, Generado, Válido hasta).
+  - Botón "Eliminar certificado" con confirm.
+- `lib/main.dart`: función `cerrarAplicacion()` con `server.stop()` + `exit(0)`.
+  Import `dart:io` añadido.
+
+### 20.3. Ubicación del certificado
+
+`getApplicationSupportDirectory()/certs/sgc_cert.pem` y `sgc_key.pem`.
+
+En macOS:
+`~/Library/Containers/com.sgc.sgc/Data/Library/Application Support/com.sgc.sgc/certs/`
+
+En Windows:
+`%APPDATA%\com.sgc.sgc\certs\`
+
+### 20.4. Flujo de uso (técnico)
+
+1. Admin va a Ajustes → Conexión de Red.
+2. Pulsa "Generar certificado TLS" (confirm si ya existe).
+3. Diálogo "Reiniciar ahora" / "Descartar" con aviso de abrir manualmente.
+4. Si "Reiniciar ahora": cuenta regresiva 5s → `exit(0)`.
+5. Admin abre la app manualmente.
+6. Servidor arranca en `https://0.0.0.0:8443`.
+7. Tarjeta de estado muestra ruta, fecha de generación y vencimiento.
+
+### 20.5. Notas técnicas
+
+- `restart_app` NO se usa (falla en macOS sandboxed).
+- `exit(0)` es abrupto pero aceptable: `server.stop()` previo cierra el socket.
+- Cert válido 3650 días (10 años). No se renueva automáticamente.
+- Si se elimina el cert, el servidor vuelve a HTTP 8080 (con warning en stderr).
+- Pendiente: probar en LAN real (router del Congreso o cable Ethernet).
+
+### 20.6. Por qué TLS en una intranet
+
+TLS no es "para que el cliente funcione mejor". Es para que los datos que viajan
+entre el cliente y el servidor no los pueda leer ni modificar nadie en la red.
+Sin TLS, cualquier persona con acceso a la red del Congreso (Wireshark, ARP
+spoofing, switch comprometido, malware en una PC) puede ver DPI, correos,
+salarios, contratos y credenciales de operadores. Con TLS, ve basura cifrada.
+
+La intranet NO es una burbuja de confianza: es una red compartida por decenas
+o cientos de personas y dispositivos. TLS es la única forma de proteger los
+datos personales de los firmantes en tránsito.
+
+Cumple la Regla X del proyecto: "TLS autofirmado mínimo en LAN".
+
+### 20.7. Lo que TLS NO hace
+
+- No acelera la app.
+- No arregla bugs del cliente.
+- No evita que un operador vea los datos en su pantalla.
+- No protege la DB del servidor (eso es cifrado en reposo, otra cosa).
+- No autentica al usuario (eso es el login).
+- No reemplaza el control de acceso (eso es authProvider y Regla VII).
+
+---
+
+## 21. MANUAL DE USUARIO — CERTIFICADO TLS (2026-11-03)
+
+### 21.1. ¿Qué es el certificado TLS?
+
+Es un archivo que permite que la comunicación entre la computadora servidor
+y las computadoras cliente viaje cifrada. Sin él, cualquier persona en la misma
+red podría ver los datos que se transmiten (nombres, DPI, correos, contratos).
+
+El certificado se genera una sola vez en la máquina que actúa como servidor.
+
+### 21.2. ¿Quién debe generarlo?
+
+Solo el usuario con rol **administrador**, y solo en la máquina que será el
+servidor del sistema. Los operadores no ven esta opción.
+
+### 21.3. Pasos para generar el certificado
+
+1. Abrir la aplicación en la máquina servidor.
+2. Iniciar sesión como administrador.
+3. Ir a **Ajustes del sistema** (menú lateral).
+4. Seleccionar **Conexión de Red**.
+5. Bajar hasta la sección **Certificado TLS**.
+6. Pulsar el botón **"Generar certificado TLS"**.
+7. Si ya existía un certificado, aparecerá un aviso preguntando si se desea
+   regenerar. Pulsar **"Sí, regenerar"** solo si es necesario.
+8. Esperar unos segundos mientras se genera el certificado.
+9. Aparecerá un mensaje: "Certificado generado correctamente".
+10. Pulsar **"Reiniciar ahora"**.
+11. La aplicación mostrará una cuenta regresiva de 5 segundos y se cerrará.
+12. **IMPORTANTE:** abrir la aplicación manualmente de nuevo desde el Dock
+    (macOS) o el menú de inicio (Windows). No se abre sola.
+13. Al volver a entrar, ir a **Ajustes → Conexión de Red** y verificar que
+    aparece la tarjeta con:
+    - Estado: Activo
+    - Ruta del certificado
+    - Fecha de generación
+    - Fecha de vencimiento
+
+### 21.4. ¿Qué pasa si no genero el certificado?
+
+El sistema funcionará igual, pero la comunicación entre cliente y servidor
+irá sin cifrar (HTTP plano). Esto significa que cualquier persona en la red
+del Congreso podría ver los datos que se transmiten. No se recomienda.
+
+### 21.5. ¿Cuándo caduca el certificado?
+
+El certificado tiene una validez de **10 años** desde su generación. La fecha
+exacta de vencimiento aparece en la tarjeta de estado, en el campo
+**"Válido hasta"**.
+
+### 21.6. ¿Cómo renuevo el certificado?
+
+Cuando el certificado esté cerca de vencer, o si por alguna razón se corrompe:
+
+1. Ir a **Ajustes → Conexión de Red → Certificado TLS**.
+2. Pulsar **"Generar certificado TLS"**.
+3. Confirmar **"Sí, regenerar"**.
+4. Reiniciar la aplicación como se indicó en los pasos anteriores.
+
+El nuevo certificado reemplaza al anterior automáticamente.
+
+### 21.7. ¿Cómo elimino el certificado?
+
+Si necesitas volver a HTTP plano (por ejemplo, para hacer pruebas):
+
+1. Ir a **Ajustes → Conexión de Red → Certificado TLS**.
+2. En la tarjeta de estado, pulsar **"Eliminar certificado"**.
+3. Confirmar la acción.
+4. Reiniciar la aplicación.
+
+Al reiniciar, el servidor arrancará en HTTP plano (puerto 8080) con un aviso
+en la consola. Para volver a TLS, genera un certificado nuevo.
+
+### 21.8. ¿Qué pasa con las computadoras cliente?
+
+Las computadoras cliente no necesitan hacer nada. La aplicación acepta
+automáticamente el certificado del servidor (está configurada para ello).
+Solo necesitan tener configurada la IP del servidor en
+**Ajustes → Conexión de Red**.
+
+### 21.9. Preguntas frecuentes
+
+**¿El certificado se genera en cada computadora?**
+No. Solo en la máquina servidor. Las computadoras cliente lo aceptan
+automáticamente.
+
+**¿Puedo generar el certificado desde una computadora cliente?**
+No. La opción solo aparece en la máquina servidor, y solo para el
+usuario administrador.
+
+**¿Qué pasa si genero el certificado y luego cambio la IP del servidor?**
+El certificado incluye la IP que tenía el servidor al momento de generarse.
+Si la IP cambia, regenera el certificado para incluir la nueva IP.
+
+**¿El certificado sirve para acceder desde fuera de la red del Congreso?**
+No. El sistema es de uso interno (intranet). El certificado protege la
+comunicación dentro de la red local.
+
+**¿Puedo usar un certificado comprado en lugar del autofirmado?**
+Sí, si el Congreso proporciona un certificado corporativo. En ese caso,
+contacta al administrador de red del Congreso.
+
+---
+
+FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 22. SELECTOR SERVIDOR/CLIENTE Y REINICIO UNIFICADO (2026-11-03)
+
+### 22.1. Contexto
+El panel de red no tenía forma visual de cambiar entre modo servidor y cliente.
+Solo existía la opción en el wizard de primer arranque, y si fallaba, había que
+tocar SQLite a mano. Se añadió un selector `Switch` en el `_NetworkPanel`.
+
+### 22.2. Cambios en admin_settings_screen.dart
+
+- Añadido estado `_esServidor` y `_cambiandoModo` en `_NetworkPanelState`.
+- `_loadIp()` ahora también carga `es_servidor` de la DB.
+- Nuevo método `_cambiarModo(bool aServidor)`:
+  1. Confirm inicial ("Vas a activar MODO SERVIDOR/CLIENTE...").
+  2. UPDATE en `configuracion` (`es_servidor` = 'true'/'false').
+  3. `AppDialogs.confirm` "Reiniciar ahora" / "Descartar" con aviso de abrir
+     manualmente desde el Dock/Launchpad.
+  4. Si "Reiniciar ahora": `_mostrarCuentaRegresiva()` → 5s → `cerrarAplicacion()`.
+- En el `build()`, sección "Modo de esta máquina" con un `Switch`:
+  - Icono dinámico (`dns_outlined` si servidor, `computer` si cliente).
+  - Texto descriptivo dinámico.
+  - `onChanged: null` cuando `_cambiandoModo == true` (deshabilitado).
+- Se descartó `RadioGroup` porque `onChanged` es no-nullable y causaba error
+  de tipos. El `Switch` es más simple para dos opciones.
+
+### 22.3. Flujo unificado
+Tanto "cambiar modo" como "generar certificado" siguen el mismo patrón:
+acción → confirm → "Reiniciar ahora"/"Descartar" → cuenta regresiva 5s → `exit(0)`.
+
+### 22.4. Estado
+`flutter analyze: No issues found!`.
+
+---
+
+FIN DE LA ACTUALIZACIÓN
