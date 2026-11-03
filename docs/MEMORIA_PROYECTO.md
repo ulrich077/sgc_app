@@ -794,3 +794,154 @@ acción → confirm → "Reiniciar ahora"/"Descartar" → cuenta regresiva 5s �
 ---
 
 FIN DE LA ACTUALIZACIÓN
+---
+
+## 23. USUARIOS, GRUPOS Y PERMISOS GRANULARES — PENDIENTE (2026-11-03)
+
+### 23.1. Contexto
+El sistema tiene roles fijos (`administrador`, `operador`) y una tabla `permisos`
+en el esquema, pero NO existe UI para gestionar usuarios, grupos ni permisos.
+`usuarios_screen.dart` es un stub de 36 líneas.
+
+Se va a replicar el patrón que funcionó en Farmacia App:
+roles fijos → grupos de permisos → permisos granulares por módulo/acción,
+con helper `auth.puede(modulo, accion)`.
+
+### 23.2. Patrón de Farmacia App (referencia)
+
+Estructura de tablas:
+- `roles`: administrador, operador (fijos, no editables).
+- `grupos`: agrupaciones lógicas de permisos (ej. "Citas - Operación").
+  Campos: id, nombre, descripcion, modulo, activo.
+- `rol_grupos`: tabla intermedia (rol_id, grupo_id).
+- `permisos`: permisos granulares asignados a grupos.
+  Campos: id, grupo_id, modulo, accion.
+
+Cadena de resolución:
+usuario → rol → rol_grupos → grupos → permisos → cache en AuthState.
+
+Ventaja: el admin puede crear grupos nuevos y asignarlos a roles sin tocar código.
+Los permisos son datos, no hardcode.
+
+### 23.3. Checklist de implementación
+
+BLOQUE 0 — Estado actual (verificado)
+- [x] Tabla roles con administrador y operador seedeados.
+- [x] Tabla usuarios con rol_id, activo, soft delete.
+- [x] Tabla permisos (rol_id, modulo, accion) en el esquema.
+- [x] AuthState con isAdmin e isOperador (hardcode).
+- [ ] usuarios_screen.dart (36 líneas, solo class UsuariosScreen) — stub.
+- [ ] Tabla grupos — no existe.
+- [ ] Tabla rol_grupos — no existe.
+- [ ] Helper auth.puede(modulo, accion) — no existe.
+- [ ] UI de permisos granulares — no existe.
+- [ ] Sidebar con estado persistido — no existe.
+
+BLOQUE 1 — Base de datos (Drift)
+- [ ] 1.1 Añadir tabla grupos (id, nombre, descripcion, modulo, activo).
+- [ ] 1.2 Añadir tabla rol_grupos (id, rol_id, grupo_id).
+- [ ] 1.3 Migración de Drift (schemaVersion +1, onUpgrade).
+- [ ] 1.4 Seed de 6 grupos por defecto.
+- [ ] 1.5 Seed de rol_grupos (admin → todos, operador → Citas-Operación + Reportes).
+- [ ] 1.6 Regenerar Drift: dart run build_runner build --delete-conflicting-outputs.
+
+BLOQUE 2 — Helper de permisos
+- [ ] 2.1 Cargar permisos al login (rol → grupos → permisos) en _permisosCache.
+- [ ] 2.2 Método auth.puede(modulo, accion) en AuthState.
+- [ ] 2.3 Método auth.grupos (lista de grupos del usuario).
+- [ ] 2.4 Recargar permisos al cambiar rol o grupos de un usuario.
+
+BLOQUE 3 — Pantalla de Usuarios
+- [ ] 3.1 Listado con DataTable (Regla V: sort SQL, paginación 20).
+- [ ] 3.2 Botón "Nuevo usuario" → modal (username, nombre, password, rol, activo).
+- [ ] 3.3 Acción editar.
+- [ ] 3.4 Acción reset password.
+- [ ] 3.5 Acción activar/desactivar.
+- [ ] 3.6 Acción eliminar (soft delete) con confirm.
+- [ ] 3.7 Solo visible si auth.isAdmin (triple seguridad: sidebar + ruta + header).
+
+BLOQUE 4 — Pantalla de Grupos
+- [ ] 4.1 Listado de grupos con DataTable.
+- [ ] 4.2 Botón "Nuevo grupo" → modal (nombre, descripción, módulo).
+- [ ] 4.3 Checkboxes de permisos por grupo (ver, crear, editar, eliminar, enviar_correo, admin).
+- [ ] 4.4 Acción editar grupo.
+- [ ] 4.5 Acción eliminar grupo (con confirm).
+- [ ] 4.6 Asignar grupos a roles (UI de checkboxes rol × grupo).
+- [ ] 4.7 Solo visible si auth.isAdmin.
+
+BLOQUE 5 — Pantalla de Permisos (opcional, redundante con Bloque 4)
+- [ ] 5.1 Listado de permisos por grupo y módulo.
+- [ ] 5.2 Edición inline de permisos (checkboxes).
+- [ ] 5.3 Solo visible si auth.isAdmin.
+NOTA: si el Bloque 4 ya permite editar permisos por grupo, este bloque puede omitirse.
+
+BLOQUE 6 — Sidebar con memorización
+- [ ] 6.1 Persistir colapsado/expandido en shared_preferences.
+- [ ] 6.2 Cargar estado al inicio.
+- [ ] 6.3 Guardar estado al cambiar.
+
+BLOQUE 7 — Integración en la UI existente
+- [ ] 7.1 Añadir "Usuarios" al sidebar (solo admin).
+- [ ] 7.2 Añadir "Grupos y Permisos" al sidebar (solo admin).
+- [ ] 7.3 Reemplazar auth.isAdmin por auth.puede(modulo, accion) donde aplique.
+- [ ] 7.4 Reemplazar auth.isOperador por auth.puede(...) en acciones de citas.
+- [ ] 7.5 Verificar que operador NO ve /admin-settings, /auditoria, /usuarios, /grupos.
+
+BLOQUE 8 — Verificación final
+- [ ] 8.1 flutter analyze limpio.
+- [ ] 8.2 Regenerar Drift.
+- [ ] 8.3 Probar login como admin: ve todo.
+- [ ] 8.4 Probar login como operador: NO ve usuarios/grupos/auditoría.
+- [ ] 8.5 Probar crear usuario.
+- [ ] 8.6 Probar crear grupo con permisos.
+- [ ] 8.7 Probar asignar grupo a rol.
+- [ ] 8.8 Commit siguiendo Regla XII.
+
+### 23.4. Grupos por defecto propuestos
+
+| Grupo | Permisos |
+|---|---|
+| Citas - Operación | citas:ver, citas:crear, citas:editar, citas:enviar_correo |
+| Citas - Eliminar | citas:eliminar |
+| Usuarios | usuarios:ver, usuarios:crear, usuarios:editar, usuarios:eliminar |
+| Auditoría | auditoria:ver |
+| Configuración | smtp:admin, plantillas:editar, configuracion:admin |
+| Reportes | reportes:ver |
+
+Asignación inicial:
+- administrador → todos los grupos.
+- operador → Citas - Operación + Reportes.
+
+### 23.5. Módulos y acciones del SGC
+
+Modulos: citas, usuarios, auditoria, smtp, plantillas, reportes, configuracion.
+Acciones: ver, crear, editar, eliminar, enviar_correo, admin.
+
+### 23.6. Prioridad de implementación
+
+Alta: Bloques 1, 2 (sin DB y helper, nada funciona).
+Alta: Bloque 3 (usuarios es lo más urgente).
+Alta: Bloque 4 (grupos es el corazón del patrón).
+Media: Bloque 6 (sidebar cosmético).
+Media: Bloque 7 (integración en UI).
+Baja: Bloque 5 (redundante con Bloque 4).
+Alta: Bloque 8 (verificación y commit).
+
+### 23.7. Decisiones pendientes de confirmar
+
+1. ¿Se replican los 6 grupos por defecto tal cual?
+2. ¿Se omite el Bloque 5 (pantalla de permisos) por ser redundante?
+3. ¿Los módulos son los 7 listados, o se añaden más (documentos, dashboard, kanban)?
+4. ¿Roles fijos (admin/operador) o el admin puede crear roles nuevos? (recomendado: fijos)
+
+### 23.8. Notas para próximas sesiones
+
+- El patrón de Farmacia App está probado y funciona. No inventar desde cero.
+- La migración de Drift requiere schemaVersion +1 y onUpgrade.
+- Regenerar con build_runner después de tocar tablas.
+- El helper auth.puede() debe usarse en toda la UI (botones, rutas, sidebar).
+- Regla VII: triple seguridad (sidebar + ruta + header) para rutas de admin.
+
+---
+
+FIN DE LA ACTUALIZACIÓN
