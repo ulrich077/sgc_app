@@ -240,3 +240,48 @@ Cada serie tiene:
 ---
 
 FIN DE LA ACTUALIZACIÓN
+
+---
+
+## 18. GRÁFICA DE ACTIVIDAD Y CROSS-FILTERING EN DASHBOARD (2026-11-02)
+
+### 18.1. Paquete Utilizado
+- **`fl_chart`**: Se instaló con `flutter pub add fl_chart`.
+- Es el paquete estándar para gráficas en Flutter. Permite gráficas de líneas, barras, pastel, etc.
+
+### 18.2. Componente `_LineChartCard` (Gráfica de Líneas)
+- Se agregó una tarjeta entre los KPIs y el calendario/citas.
+- **Datos**: Se conecta a `repo.watchTodas()` (Drift Stream), por lo que es **100% reactivo**.
+  - Cualquier `INSERT` o `UPDATE` en la tabla `citas` redibuja la gráfica automáticamente.
+- **Rango**: 11 días en total (5 días antes de hoy y 5 días después).
+- **Series (3 líneas)**:
+  - **Azul**: Agendados (estado != CANCELADA y != CERRADA).
+  - **Verde**: Terminados (estado == CERRADA).
+  - **Naranja**: Reagendados (estado == REAGENDADA).
+- **Diseño**:
+  - Leyenda superior (estilo Chart.js).
+  - Cuadrícula visible (horizontal y vertical) en gris suave.
+  - Líneas curvas (`isCurved: true`) con puntos (`FlDotData`).
+  - Tooltips al pasar el mouse (muestra la cantidad de citas).
+- **Escala Dinámica**:
+  - El `maxY` se calcula dinámicamente como `maxValor + 2` (mínimo 5) para que la línea más alta no se desborde.
+  - El intervalo del eje Y se calcula como `(maxY / 5).ceilToDouble()`.
+- **Eje X**: Muestra la fecha cada 2 días (formato `d MMM`, ej. "3 nov").
+
+### 18.3. Cross-Filtering (Filtrado Cruzado)
+- Al hacer clic en un punto de la gráfica, se dispara un callback (`onPuntoSeleccionado`).
+- El Dashboard recibe la fecha y el tipo de serie (agendados, terminados, reagendados).
+- Se actualiza `_selectedDay` y `_focusedDay` en el calendario, y el panel de "Citas para el día" se filtra para mostrar solo las citas de ese tipo en ese día.
+- Si el usuario hace clic en el calendario manualmente, se quita el filtro y se muestran todas las citas del día.
+
+### 18.4. Problemas Resueltos
+| Problema | Solución |
+|---|---|
+| La gráfica se desbordaba | `maxY` dinámico: `(maxValor + 2).ceilToDouble().clamp(5.0, ...)`. |
+| Se repetían los días | Se generó una lista fija de 11 días (5 antes, 5 después) y se agrupa por fecha exacta. |
+| Error `setState` en `ConsumerWidget` | Se cambiaron las llamadas directas por callbacks (`onPuntoSeleccionado`). |
+| Variables no usadas (`_filtroTipoGrafica`, `_filtroFechaGrafica`) | Se eliminaron porque el filtrado se hace directamente en `_cargarCitasDelDia`. |
+
+---
+
+FIN DE LA ACTUALIZACIÓN

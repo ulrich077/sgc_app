@@ -8,6 +8,10 @@ import 'core/providers/database_provider.dart';
 import 'server/sgc_server.dart';
 import 'server/email_queue_worker.dart';
 
+// Variables globales para las instancias del servidor y worker
+SgcServer? globalServerInstance;
+EmailQueueWorker? globalWorkerInstance;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -48,7 +52,12 @@ class _ServerBootGateState extends ConsumerState<ServerBootGate> {
         final server = SgcServer(db);
         await server.start(host: '0.0.0.0', port: 8080);
         
-        EmailQueueWorker(db).start(intervalo: const Duration(seconds: 5));
+        final worker = EmailQueueWorker(db);
+        worker.start(intervalo: const Duration(seconds: 5));
+        
+        globalServerInstance = server;
+        globalWorkerInstance = worker;
+        
         debugPrint('✅ Servidor y Worker de correos iniciados.');
       } else {
         debugPrint('💻 Iniciando SGC en modo CLIENTE...');
