@@ -162,7 +162,13 @@ Widget _headerWithSort(String label, int index, int? activeIndex, bool ascending
   return Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Text(label),
+      Flexible(
+        child: Text(
+          label,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+      ),
       const SizedBox(width: 4),
       Icon(
         activeIndex == index
