@@ -21,10 +21,18 @@ class CitasScreen extends ConsumerStatefulWidget {
 class _CitasScreenState extends ConsumerState<CitasScreen> {
   CitasQuery _query = const CitasQuery();
   final _searchCtrl = TextEditingController();
-  int? _sortColumnIndex;
+  int? _sortColumnIndex = 0;
   bool _sortAscending = false;
 
-  static const _sortKeys = ['nombre', 'fecha', 'estado', 'creada'];
+  static const _sortKeys = [
+    'nombre',   // 0
+    'dpi',      // 1
+    'correo',   // 2
+    'telefono', // 3
+    'fecha',    // 4
+    'estado',   // 5
+    'creada',   // 6
+  ];
 
   @override
   void dispose() {
@@ -230,15 +238,19 @@ class _CitasTable extends StatelessWidget {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final tableWidth = constraints.maxWidth;
+            final tableWidth = constraints.maxWidth < AppSizes.tableMinWidth
+                ? AppSizes.tableMinWidth
+                : constraints.maxWidth;
 
-            return ConstrainedBox(
-              constraints: BoxConstraints(minWidth: tableWidth, maxHeight: 600),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: tableWidth,
                 child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
+                  scrollDirection: Axis.vertical,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 600),
+                    child: DataTable(
                     sortColumnIndex: sortColumnIndex,
                     sortAscending: sortAscending,
                     showCheckboxColumn: false,
@@ -250,13 +262,14 @@ class _CitasTable extends StatelessWidget {
                       return Colors.transparent;
                     }),
                     columns: [
-                      DataColumn(label: const Text('Nombre'), onSort: (columnIndex, ascending) => onSort(0, !sortAscending)),
-                      const DataColumn(label: Text('DPI')),
-                      const DataColumn(label: Text('Correo')),
-                      const DataColumn(label: Text('Teléfono')),
-                      DataColumn(label: const Text('Fecha firma'), onSort: (columnIndex, ascending) => onSort(1, !sortAscending)),
-                      DataColumn(label: const Text('Estado'), onSort: (columnIndex, ascending) => onSort(2, !sortAscending)),
-                      DataColumn(label: const Text('Creada'), onSort: (columnIndex, ascending) => onSort(3, !sortAscending)),
+                      const DataColumn(label: Text('#'), columnWidth: FixedColumnWidth(40)),
+                      DataColumn(label: _headerWithSort('Nombre', 0, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(3), onSort: (columnIndex, ascending) => onSort(0, !sortAscending)),
+                      DataColumn(label: _headerWithSort('DPI', 1, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(1.5), onSort: (columnIndex, ascending) => onSort(1, !sortAscending)),
+                      DataColumn(label: _headerWithSort('Correo', 2, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(3), onSort: (columnIndex, ascending) => onSort(2, !sortAscending)),
+                      DataColumn(label: _headerWithSort('Teléfono', 3, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(1), onSort: (columnIndex, ascending) => onSort(3, !sortAscending)),
+                      DataColumn(label: _headerWithSort('Fecha firma', 4, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(1.5), onSort: (columnIndex, ascending) => onSort(4, !sortAscending)),
+                      DataColumn(label: _headerWithSort('Estado', 5, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(1), onSort: (columnIndex, ascending) => onSort(5, !sortAscending)),
+                      DataColumn(label: _headerWithSort('Creada', 6, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(1.5), onSort: (columnIndex, ascending) => onSort(6, !sortAscending)),
                     ],
                     rows: page.rows.map((cita) {
                       final estado = CitaEstado.fromDb(cita.estado);
@@ -270,6 +283,7 @@ class _CitasTable extends StatelessWidget {
                       return DataRow(
                         onSelectChanged: (_) => CitaDetalleModal.show(context, cita.id),
                         cells: [
+                          DataCell(Text('${page.rows.indexOf(cita) + 1 + query.page * query.pageSize}', style: const TextStyle(fontSize: 12))),
                           DataCell(Text(cita.personaNombre, style: const TextStyle(fontWeight: FontWeight.w500))),
                           DataCell(Text(cita.personaDpi ?? '—')),
                           DataCell(Text(cita.personaCorreo)),
@@ -280,6 +294,7 @@ class _CitasTable extends StatelessWidget {
                         ],
                       );
                     }).toList(),
+                    ),
                   ),
                 ),
               ),
@@ -289,6 +304,23 @@ class _CitasTable extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _headerWithSort(String label, int index, int? activeIndex, bool ascending) {
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(label),
+      const SizedBox(width: 4),
+      Icon(
+        activeIndex == index
+            ? (ascending ? Icons.arrow_upward : Icons.arrow_downward)
+            : Icons.unfold_more,
+        size: 14,
+        color: activeIndex == index ? AppColors.primary : Colors.grey.shade400,
+      ),
+    ],
+  );
 }
 
 class _PaginacionBar extends StatelessWidget {

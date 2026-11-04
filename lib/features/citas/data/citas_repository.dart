@@ -446,14 +446,36 @@ class CitasRepository {
     return (_db.select(_db.citas)..where((t) => t.isDelete.equals(false))..orderBy([(t) => OrderingTerm.desc(t.dateCreation)])..limit(limit)).watch();
   }
 
-  Stream<List<Cita>> watchFirmasEnviadas() {
-    return (_db.select(_db.citas)
-          ..where((t) => 
-              (t.estado.equals(CitaEstado.contratoEnviado.dbValue) | 
-               t.estado.equals(CitaEstado.cerrada.dbValue)) &
-              t.isDelete.equals(false))
-          ..orderBy([(t) => OrderingTerm(expression: t.fechaHoraFirma, mode: OrderingMode.desc)]))
-        .watch();
+  Stream<List<Cita>> watchFirmasEnviadas({
+    String sortColumn = 'fecha',
+    bool ascending = false,
+  }) {
+    final q = _db.select(_db.citas)
+      ..where((t) => 
+          (t.estado.equals(CitaEstado.contratoEnviado.dbValue) | 
+           t.estado.equals(CitaEstado.cerrada.dbValue)) &
+          t.isDelete.equals(false));
+
+    switch (sortColumn) {
+      case 'nombre':
+        q.orderBy([(t) => OrderingTerm(expression: t.personaNombre, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'dpi':
+        q.orderBy([(t) => OrderingTerm(expression: t.personaDpi, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'correo':
+        q.orderBy([(t) => OrderingTerm(expression: t.personaCorreo, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'estado':
+        q.orderBy([(t) => OrderingTerm(expression: t.estado, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'fecha':
+      default:
+        q.orderBy([(t) => OrderingTerm(expression: t.fechaHoraFirma, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+    }
+
+    return q.watch();
   }
 
   Future<List<Cita>> obtenerCitasPorFecha(DateTime inicio, DateTime fin) async {
@@ -495,6 +517,15 @@ class CitasRepository {
     switch (sortColumn) {
       case 'nombre':
         q.orderBy([(t) => OrderingTerm(expression: t.personaNombre, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'dpi':
+        q.orderBy([(t) => OrderingTerm(expression: t.personaDpi, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'correo':
+        q.orderBy([(t) => OrderingTerm(expression: t.personaCorreo, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
+        break;
+      case 'telefono':
+        q.orderBy([(t) => OrderingTerm(expression: t.personaTelefono, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);
         break;
       case 'estado':
         q.orderBy([(t) => OrderingTerm(expression: t.estado, mode: ascending ? OrderingMode.asc : OrderingMode.desc)]);

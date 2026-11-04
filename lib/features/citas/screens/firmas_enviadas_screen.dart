@@ -9,11 +9,28 @@ import '../data/citas_repository.dart';
 import '../domain/cita_estado.dart';
 import '../widgets/cita_detalle_modal.dart';
 
-class FirmasEnviadasScreen extends ConsumerWidget {
+class FirmasEnviadasScreen extends ConsumerStatefulWidget {
   const FirmasEnviadasScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FirmasEnviadasScreen> createState() =>
+      _FirmasEnviadasScreenState();
+}
+
+class _FirmasEnviadasScreenState extends ConsumerState<FirmasEnviadasScreen> {
+  static const _sortKeys = ['nombre', 'dpi', 'correo', 'fecha', 'estado'];
+  int? _sortColumnIndex = 0;
+  bool _sortAscending = true;
+
+  void _onSort(int columnIndex, bool ascending) {
+    setState(() {
+      _sortColumnIndex = columnIndex;
+      _sortAscending = ascending;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final repo = ref.watch(citasRepositoryProvider);
 
     return Scaffold(
@@ -32,7 +49,10 @@ class FirmasEnviadasScreen extends ConsumerWidget {
           ),
           Expanded(
             child: StreamBuilder<List<Cita>>(
-              stream: repo.watchFirmasEnviadas(),
+              stream: repo.watchFirmasEnviadas(
+                sortColumn: _sortKeys[_sortColumnIndex ?? 0],
+                ascending: _sortAscending,
+              ),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
@@ -42,7 +62,12 @@ class FirmasEnviadasScreen extends ConsumerWidget {
                   return const Center(child: Text('No hay firmas enviadas.'));
                 }
 
-                return _FirmasTable(citas: citas);
+                return _FirmasTable(
+                  citas: citas,
+                  sortColumnIndex: _sortColumnIndex,
+                  sortAscending: _sortAscending,
+                  onSort: _onSort,
+                );
               },
             ),
           ),
@@ -54,7 +79,15 @@ class FirmasEnviadasScreen extends ConsumerWidget {
 
 class _FirmasTable extends StatelessWidget {
   final List<Cita> citas;
-  const _FirmasTable({required this.citas});
+  final int? sortColumnIndex;
+  final bool sortAscending;
+  final void Function(int, bool) onSort;
+  const _FirmasTable({
+    required this.citas,
+    required this.sortColumnIndex,
+    required this.sortAscending,
+    required this.onSort,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -74,22 +107,29 @@ class _FirmasTable extends StatelessWidget {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final tableWidth = constraints.maxWidth;
-            return ConstrainedBox(
-              constraints: BoxConstraints(minWidth: tableWidth, maxHeight: 600),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
+            final tableWidth = constraints.maxWidth < AppSizes.tableMinWidth
+                ? AppSizes.tableMinWidth
+                : constraints.maxWidth;
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: tableWidth,
                 child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
+                  scrollDirection: Axis.vertical,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 600),
+                    child: DataTable(
+                    sortColumnIndex: sortColumnIndex,
+                    sortAscending: sortAscending,
                     showCheckboxColumn: false,
                     headingRowColor: WidgetStateProperty.all(AppColors.primary.withValues(alpha: 0.05)),
-                    columns: const [
-                      DataColumn(label: Text('Nombre')),
-                      DataColumn(label: Text('DPI')),
-                      DataColumn(label: Text('Correo')),
-                      DataColumn(label: Text('Fecha firma')),
-                      DataColumn(label: Text('Estado')),
+                    columns: [
+                      const DataColumn(label: Text('#'), columnWidth: FixedColumnWidth(40)),
+                      DataColumn(label: _headerWithSort('Nombre', 0, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(3), onSort: (i, asc) => onSort(0, !sortAscending)),
+                      DataColumn(label: _headerWithSort('DPI', 1, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(2), onSort: (i, asc) => onSort(1, !sortAscending)),
+                      DataColumn(label: _headerWithSort('Correo', 2, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(4), onSort: (i, asc) => onSort(2, !sortAscending)),
+                      DataColumn(label: _headerWithSort('Fecha firma', 3, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(2), onSort: (i, asc) => onSort(3, !sortAscending)),
+                      DataColumn(label: _headerWithSort('Estado', 4, sortColumnIndex, sortAscending), columnWidth: const FlexColumnWidth(1.5), onSort: (i, asc) => onSort(4, !sortAscending)),
                     ],
                     rows: citas.map((cita) {
                       final estado = CitaEstado.fromDb(cita.estado);
@@ -97,6 +137,7 @@ class _FirmasTable extends StatelessWidget {
                       return DataRow(
                         onSelectChanged: (_) => CitaDetalleModal.show(context, cita.id),
                         cells: [
+                          DataCell(Text('${citas.indexOf(cita) + 1}', style: const TextStyle(fontSize: 12))),
                           DataCell(Text(cita.personaNombre, style: const TextStyle(fontWeight: FontWeight.w500))),
                           DataCell(Text(cita.personaDpi ?? '—')),
                           DataCell(Text(cita.personaCorreo)),
@@ -105,6 +146,7 @@ class _FirmasTable extends StatelessWidget {
                         ],
                       );
                     }).toList(),
+                    ),
                   ),
                 ),
               ),
@@ -114,6 +156,23 @@ class _FirmasTable extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget _headerWithSort(String label, int index, int? activeIndex, bool ascending) {
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(label),
+      const SizedBox(width: 4),
+      Icon(
+        activeIndex == index
+            ? (ascending ? Icons.arrow_upward : Icons.arrow_downward)
+            : Icons.unfold_more,
+        size: 14,
+        color: activeIndex == index ? AppColors.primary : Colors.grey.shade400,
+      ),
+    ],
+  );
 }
 
 class _EstadoBadge extends StatelessWidget {
